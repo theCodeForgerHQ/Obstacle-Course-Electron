@@ -34,4 +34,7 @@ interface Window {
     ) => UnsubscribeFunction;
     sendFrameAction: (payload: FrameWindowAction) => void;
   };
+  api: {
+    invoke: (channel: string, ...args: any[]) => Promise<any>;
+  };
 }

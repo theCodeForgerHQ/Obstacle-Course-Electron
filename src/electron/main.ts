@@ -1,15 +1,38 @@
 import { app, BrowserWindow } from "electron";
 import path from "path";
-import { isDev, initDb } from "./utils.js";
+import {
+  isDev,
+  initDb,
+  createCustomer,
+  getCustomer,
+  getCustomers,
+  updateCustomer,
+  deleteCustomer,
+  getScores,
+} from "./utils.js";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 import { ipcMain } from "electron";
-import { addScore, getScores } from "./utils.js";
+ipcMain.handle("db-customers-create", (event, customer) => {
+  return createCustomer(customer);
+});
 
-ipcMain.handle("db-add-score", (event, uid: string, score?: number) => {
-  return addScore(uid, score);
+ipcMain.handle("db-customers-get", (event, uid: string) => {
+  return getCustomer(uid);
+});
+
+ipcMain.handle("db-customers-get-all", () => {
+  return getCustomers();
+});
+
+ipcMain.handle("db-customers-update", (event, uid: string, updates) => {
+  return updateCustomer(uid, updates);
+});
+
+ipcMain.handle("db-customers-delete", (event, uid: string) => {
+  return deleteCustomer(uid);
 });
 
 ipcMain.handle("db-get-scores", () => {
