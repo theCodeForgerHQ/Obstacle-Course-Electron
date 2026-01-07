@@ -306,7 +306,7 @@ function App() {
   }
 
   async function handleDelete(uid: string) {
-    const confirmed = window.confirm("Delete this customer?");
+    const confirmed = window.confirm("Delete this Participant?");
     if (!confirmed) return;
     setCustomerError(null);
     try {
@@ -349,7 +349,7 @@ function App() {
             variant={tab === "customers" ? "default" : "ghost"}
             onClick={() => setTab("customers")}
           >
-            Customers
+            Participants
           </Button>
           <Button
             variant={tab === "leaderboard" ? "default" : "ghost"}
@@ -409,13 +409,13 @@ function App() {
           <header className="flex justify-between items-start gap-4 mb-6">
             <div>
               <h1 className="text-3xl font-semibold text-gray-900">
-                Obstacle Course Registry
+                Obstacle Course Registrations
               </h1>
               <p className="text-sm text-gray-600 mt-1">
-                Track entrants, emergency contacts, and blood groups.
+                Manage Participants, Emergency Contacts, and Medical Details.
               </p>
             </div>
-            <Button onClick={openCreate}>Add customer</Button>
+            <Button onClick={openCreate}>Add Participant</Button>
           </header>
           <section className="bg-white border border-gray-200 rounded-xl p-4 mb-4 shadow-sm">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -423,13 +423,13 @@ function App() {
                 <label className="text-sm text-gray-700">Search</label>
                 <Input
                   type="search"
-                  placeholder="Search by name, UID, phone, address"
+                  placeholder="Search by Name, UID, Phone, Address"
                   value={customerSearch}
                   onChange={(e) => setCustomerSearch(e.target.value)}
                 />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-sm text-gray-700">Blood group</label>
+                <label className="text-sm text-gray-700">Blood Group</label>
                 <Select value={bloodFilter} onValueChange={setBloodFilter}>
                   <SelectTrigger>
                     <SelectValue />
@@ -455,7 +455,9 @@ function App() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="created_at">Joined</SelectItem>
+                      <SelectItem value="created_at">
+                        Date Registered
+                      </SelectItem>
                       <SelectItem value="name">Name</SelectItem>
                       <SelectItem value="uid">UID</SelectItem>
                     </SelectContent>
@@ -481,11 +483,11 @@ function App() {
           <section className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
             {loadingCustomers ? (
               <div className="p-8 text-center text-gray-500">
-                Loading customers…
+                Loading Participants…
               </div>
             ) : filtered.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
-                No customers match your filters.
+                No Participants match the selected filters.
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -493,7 +495,7 @@ function App() {
                   <thead className="border-b border-gray-200">
                     <tr>
                       <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
-                        UID
+                        UID/RFID
                       </th>
                       <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
                         Name
@@ -502,7 +504,7 @@ function App() {
                         Address
                       </th>
                       <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
-                        Joined
+                        Registered On
                       </th>
                       <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
                         DOB
@@ -511,10 +513,10 @@ function App() {
                         Phone
                       </th>
                       <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
-                        Emergency
+                        Emergency Contact
                       </th>
                       <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
-                        Blood
+                        Blood Group
                       </th>
                       <th className="text-right text-xs font-semibold text-gray-600 px-4 py-3">
                         Actions
@@ -551,7 +553,7 @@ function App() {
                         <td className="px-4 py-3 text-sm">
                           {new Date(row.created_at).toLocaleDateString()}
                         </td>
-                        <td className="px-4 py-3 text-sm">
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">
                           {row.dateOfBirth || "—"}
                         </td>
                         <td className="px-4 py-3">
@@ -608,10 +610,9 @@ function App() {
         <>
           <header className="flex justify-between mb-6">
             <div>
-              <h1 className="text-3xl font-semibold">Players Leaderboard</h1>
+              <h1 className="text-3xl font-semibold">Leaderboard</h1>
               <p className="text-sm text-gray-600 mt-1">
-                View top performers ranked by total score across selected time
-                periods.
+                Rankings based on total scores for the selected period.
               </p>
             </div>
             <Select
@@ -622,18 +623,18 @@ function App() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="today">Top Today</SelectItem>
-                <SelectItem value="week">Top This Week</SelectItem>
-                <SelectItem value="month">Top This Month</SelectItem>
-                <SelectItem value="year">Top This Year</SelectItem>
-                <SelectItem value="all">Top Since Start</SelectItem>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="week">This Week</SelectItem>
+                <SelectItem value="month">This Month</SelectItem>
+                <SelectItem value="year">This Year</SelectItem>
+                <SelectItem value="all">Since Start</SelectItem>
               </SelectContent>
             </Select>
           </header>
           <section className="bg-white border border-gray-200 rounded-xl p-4 mb-4 shadow-sm">
             <div className="flex flex-row gap-3 justify-between items-center">
               <label className="text-sm text-gray-700 w-fit shrink-0">
-                Search Player
+                Search Participant
               </label>
               <Input
                 type="search"
@@ -651,7 +652,11 @@ function App() {
           <section className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
             {loadingScores ? (
               <div className="p-8 text-center text-gray-500">
-                Loading leaderboard…
+                Loading Rankings
+              </div>
+            ) : leaderboard.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                No scores available for this period.
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -662,7 +667,7 @@ function App() {
                         Rank
                       </th>
                       <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
-                        UID
+                        UID/RFID
                       </th>
                       <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
                         Name
@@ -711,12 +716,12 @@ function App() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {editing ? "Edit customer" : "New customer"}
+              {editing ? "Edit Participant" : "New Participant"}
             </DialogTitle>
             <DialogDescription>
               {editing
-                ? "Update customer information below."
-                : "Fill in the details to register a new customer."}
+                ? "Update Participant information below."
+                : "Fill in the details to register a new Participant."}
             </DialogDescription>
           </DialogHeader>
 
@@ -837,7 +842,7 @@ function App() {
                 disabled={submitting}
                 className="w-full sm:w-auto"
               >
-                {submitting ? "Saving…" : editing ? "Save changes" : "Create"}
+                {submitting ? "Saving…" : editing ? "Save" : "Registet"}
               </Button>
             </DialogFooter>
           </form>
