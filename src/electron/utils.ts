@@ -189,24 +189,60 @@ export function isDev(): boolean {
   return process.env.NODE_ENV === "development";
 }
 
+function escapeCsv(value: any): string {
+  if (value === null || value === undefined) return "";
+  const s = String(value);
+  if (s.includes('"') || s.includes(",") || s.includes("\n")) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
 function rowsToCsv(rows: any[]): string {
   if (rows.length === 0) return "";
   const headers = Object.keys(rows[0]);
   const lines = [
     headers.join(","),
-    ...rows.map((r) =>
-      headers.map((h) => JSON.stringify(r[h] ?? "")).join(",")
-    ),
+    ...rows.map((r) => headers.map((h) => escapeCsv(r[h])).join(",")),
   ];
   return lines.join("\n");
 }
 
+function parseCsvLine(line: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+
+    if (char === '"' && line[i + 1] === '"') {
+      current += '"';
+      i++;
+    } else if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === "," && !inQuotes) {
+      result.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+
+  result.push(current);
+  return result;
+}
+
 function csvToRows(csv: string): any[] {
-  const [headerLine, ...lines] = csv.trim().split("\n");
-  const headers = headerLine.split(",");
-  return lines.map((line) => {
-    const values = JSON.parse("[" + line + "]");
-    return headers.reduce((acc, h, i) => ({ ...acc, [h]: values[i] }), {});
+  const lines = csv.trim().split(/\r?\n/);
+  const headers = parseCsvLine(lines[0]);
+
+  return lines.slice(1).map((line) => {
+    const values = parseCsvLine(line);
+    return headers.reduce(
+      (acc, h, i) => ({ ...acc, [h]: values[i] || "" }),
+      {}
+    );
   });
 }
 
@@ -263,7 +299,21 @@ export function importCustomersCsv(csv: string) {
   );
 
   const tx = db.transaction(() => {
-    for (const r of rows) stmt.run(r);
+    for (const r of rows) {
+      if (!r.uid || !r.name) continue;
+
+      stmt.run({
+        id: r.id ? Number(r.id) : null,
+        uid: r.uid.trim(),
+        name: r.name.trim(),
+        address: r.address ? r.address.trim() : null,
+        created_at: r.created_at || null,
+        dateOfBirth: r.dateOfBirth || null,
+        phone: r.phone?.trim(),
+        secondaryPhone: r.secondaryPhone?.trim(),
+        bloodGroup: r.bloodGroup?.trim(),
+      });
+    }
   });
 
   tx();
