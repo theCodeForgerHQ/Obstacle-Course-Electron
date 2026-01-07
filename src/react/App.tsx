@@ -84,12 +84,15 @@ const bloodGroups = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
 function App() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [scores, setScores] = useState<ScoreRow[]>([]);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([]);
   const [tab, setTab] = useState<TabKey>("customers");
   const [preset, setPreset] = useState<Preset>("all");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [loadingCustomers, setLoadingCustomers] = useState(true);
+  const [loadingScores, setLoadingScores] = useState(true);
+  const [customerError, setCustomerError] = useState<string | null>(null);
+  const [scoreError, setScoreError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [leaderboardSearch, setLeaderboardSearch] = useState("");
   const [bloodFilter, setBloodFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -103,42 +106,38 @@ function App() {
     refreshScores();
   }, []);
 
-  useEffect(() => {
-    computeLeaderboard();
-  }, [scores, preset]);
-
   async function refreshCustomers() {
-    setLoading(true);
-    setError(null);
+    setLoadingCustomers(true);
+    setCustomerError(null);
     try {
       const rows = (await window.api.invoke("customers:getAll")) as Customer[];
       setCustomers(rows);
     } catch (e) {
       const errorMsg =
         e instanceof Error ? e.message : "Unable to load customers";
-      setError(errorMsg);
+      setCustomerError(errorMsg);
       console.error("Error loading customers:", e);
     } finally {
-      setLoading(false);
+      setLoadingCustomers(false);
     }
   }
 
   async function refreshScores() {
-    setLoading(true);
-    setError(null);
+    setLoadingScores(true);
+    setScoreError(null);
     try {
       const rows = (await window.api.invoke("scores:getAll")) as ScoreRow[];
       setScores(rows);
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : "Unable to load scores";
-      setError(errorMsg);
+      setScoreError(errorMsg);
       console.error("Error loading scores:", e);
     } finally {
-      setLoading(false);
+      setLoadingScores(false);
     }
   }
 
-  function computeLeaderboard() {
+  const leaderboard = useMemo(() => {
     const now = new Date();
     const from = new Date(now);
 
@@ -164,18 +163,16 @@ function App() {
       }
     });
 
-    const rows = Array.from(totals.values())
+    return Array.from(totals.values())
       .sort((a, b) => b.score - a.score)
       .map((r, i) => ({
         ...r,
         rank: i + 1,
       }));
-
-    setLeaderboard(rows);
-  }
+  }, [scores, preset]);
 
   const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    const term = customerSearch.trim().toLowerCase();
     let rows = customers.filter((c) => {
       const haystack = [
         c.uid,
@@ -209,7 +206,7 @@ function App() {
     });
 
     return rows;
-  }, [bloodFilter, customers, search, sortDir, sortKey]);
+  }, [bloodFilter, customers, customerSearch, sortDir, sortKey]);
 
   function openCreate() {
     setDraft(emptyDraft);
@@ -234,41 +231,41 @@ function App() {
   function closeForm() {
     setShowForm(false);
     setSubmitting(false);
-    setError(null);
+    setFormError(null);
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSubmitting(true);
-    setError(null);
+    setFormError(null);
 
     try {
       if (!draft.uid.trim() || !draft.name.trim()) {
-        setError("UID and name are required.");
+        setFormError("UID and name are required.");
         setSubmitting(false);
         return;
       }
 
       if (!draft.phone.trim()) {
-        setError("Phone is required.");
+        setFormError("Phone is required.");
         setSubmitting(false);
         return;
       }
 
       if (!draft.secondaryPhone.trim()) {
-        setError("Emergency contact is required.");
+        setFormError("Emergency contact is required.");
         setSubmitting(false);
         return;
       }
 
       if (!draft.bloodGroup.trim()) {
-        setError("Blood group is required.");
+        setFormError("Blood group is required.");
         setSubmitting(false);
         return;
       }
 
       if (!/^\d{10}$/.test(draft.uid.trim())) {
-        setError("UID must be a 10-digit number");
+        setFormError("UID must be a 10-digit number");
         setSubmitting(false);
         return;
       }
@@ -302,7 +299,7 @@ function App() {
       console.error(err);
       const errorMsg =
         err instanceof Error ? err.message : "Save failed. Please retry.";
-      setError(errorMsg);
+      setFormError(errorMsg);
       setSubmitting(false);
     }
   }
@@ -310,7 +307,7 @@ function App() {
   async function handleDelete(uid: string) {
     const confirmed = window.confirm("Delete this customer?");
     if (!confirmed) return;
-    setError(null);
+    setCustomerError(null);
     try {
       await window.api.invoke("customers:delete", uid);
       await refreshCustomers();
@@ -318,7 +315,7 @@ function App() {
       console.error(err);
       const errorMsg =
         err instanceof Error ? err.message : "Delete failed. Please retry.";
-      setError(errorMsg);
+      setCustomerError(errorMsg);
     }
   }
 
@@ -370,8 +367,8 @@ function App() {
                 <Input
                   type="search"
                   placeholder="Search by name, UID, phone, address"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
                 />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -419,13 +416,13 @@ function App() {
               </div>
             </div>
           </section>
-          {error && (
+          {customerError && (
             <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-sm text-red-800">
-              {error}
+              {customerError}
             </div>
           )}
           <section className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-            {loading ? (
+            {loadingCustomers ? (
               <div className="p-8 text-center text-gray-500">
                 Loading customers…
               </div>
@@ -584,20 +581,20 @@ function App() {
               <Input
                 type="search"
                 placeholder="Search by name"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={leaderboardSearch}
+                onChange={(e) => setLeaderboardSearch(e.target.value)}
               />
             </div>
           </section>
-          {error && (
+          {scoreError && (
             <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-sm text-red-800">
-              {error}
+              {scoreError}
             </div>
           )}
           <section className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-            {loading ? (
+            {loadingScores ? (
               <div className="p-8 text-center text-gray-500">
-                Loading customers…
+                Loading leaderboard…
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -621,7 +618,9 @@ function App() {
                   <tbody>
                     {leaderboard
                       .filter((row) =>
-                        row.name.toLowerCase().includes(search.toLowerCase())
+                        row.name
+                          .toLowerCase()
+                          .includes(leaderboardSearch.toLowerCase())
                       )
                       .map((row, idx) => (
                         <tr
@@ -664,9 +663,9 @@ function App() {
             </DialogDescription>
           </DialogHeader>
 
-          {error && (
+          {formError && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
-              {error}
+              {formError}
             </div>
           )}
 
