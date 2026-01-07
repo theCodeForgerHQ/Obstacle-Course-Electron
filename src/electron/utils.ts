@@ -32,8 +32,41 @@ export interface CustomerUpdate {
 }
 
 export function initDb() {
-  const createCustomersTable = `
-    CREATE TABLE IF NOT EXISTS customers (
+  // const createCustomersTable = `
+  //   CREATE TABLE IF NOT EXISTS customers (
+  //     id INTEGER PRIMARY KEY AUTOINCREMENT,
+  //     uid TEXT NOT NULL UNIQUE,
+  //     name TEXT NOT NULL,
+  //     address TEXT,
+  //     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  //     date_of_birth DATE,
+  //     phone TEXT NOT NULL,
+  //     secondary_phone TEXT NOT NULL,
+  //     blood_group TEXT NOT NULL
+  //   );
+  // `;
+
+  // const createScoresTable = `
+  //   CREATE TABLE IF NOT EXISTS scores (
+  //     id INTEGER PRIMARY KEY AUTOINCREMENT,
+  //     uid TEXT NOT NULL,
+  //     score INTEGER NOT NULL DEFAULT 0,
+  //     date DATE NOT NULL DEFAULT (DATE('now')),
+  //     FOREIGN KEY (uid) REFERENCES customers(uid) ON DELETE CASCADE ON UPDATE CASCADE
+  //   );
+  // `;
+
+  // db.prepare(createCustomersTable).run();
+  // db.prepare(createScoresTable).run();
+  // db.prepare(
+  //   "CREATE INDEX IF NOT EXISTS idx_scores_uid_date ON scores (uid, date)"
+  // ).run();
+  db.prepare(`DROP TABLE IF EXISTS scores`).run();
+  db.prepare(`DROP TABLE IF EXISTS customers`).run();
+
+  db.prepare(
+    `
+    CREATE TABLE customers (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       uid TEXT NOT NULL UNIQUE,
       name TEXT NOT NULL,
@@ -44,23 +77,72 @@ export function initDb() {
       secondary_phone TEXT NOT NULL,
       blood_group TEXT NOT NULL
     );
-  `;
+  `
+  ).run();
 
-  const createScoresTable = `
-    CREATE TABLE IF NOT EXISTS scores (
+  db.prepare(
+    `
+    CREATE TABLE scores (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       uid TEXT NOT NULL,
       score INTEGER NOT NULL DEFAULT 0,
-      date DATE NOT NULL DEFAULT (DATE('now')),
+      date DATE NOT NULL,
       FOREIGN KEY (uid) REFERENCES customers(uid) ON DELETE CASCADE ON UPDATE CASCADE
     );
-  `;
-
-  db.prepare(createCustomersTable).run();
-  db.prepare(createScoresTable).run();
-  db.prepare(
-    "CREATE INDEX IF NOT EXISTS idx_scores_uid_date ON scores (uid, date)"
+  `
   ).run();
+
+  db.prepare("CREATE INDEX idx_scores_uid_date ON scores (uid, date)").run();
+
+  const customers = [
+    ["1000000001", "Alex Johnson", "O+"],
+    ["1000000002", "Sarah Smith", "A+"],
+    ["1000000003", "Michael Brown", "B+"],
+    ["1000000004", "Emily Davis", "AB+"],
+    ["1000000005", "David Wilson", "O-"],
+    ["1000000006", "Jessica Martinez", "A-"],
+    ["1000000007", "James Anderson", "B-"],
+    ["1000000008", "Lisa Taylor", "AB-"],
+    ["1000000009", "Robert Garcia", "O+"],
+    ["1000000010", "Jennifer Lee", "A+"],
+  ];
+
+  const insertCustomer = db.prepare(`
+    INSERT INTO customers
+    (uid, name, address, date_of_birth, phone, secondary_phone, blood_group)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  customers.forEach(([uid, name, blood]) => {
+    insertCustomer.run(
+      uid,
+      name,
+      "Sample Address",
+      "1995-01-01",
+      "9000000000",
+      "9111111111",
+      blood
+    );
+  });
+
+  const insertScore = db.prepare(`
+    INSERT INTO scores (uid, score, date)
+    VALUES (?, ?, ?)
+  `);
+
+  const start = new Date("2025-12-01");
+  const end = new Date();
+  const uids = customers.map((c) => c[0]);
+
+  for (let i = 0; i < 50; i++) {
+    const uid = uids[Math.floor(Math.random() * uids.length)];
+    const score = Math.floor(Math.random() * 50) + 1;
+    const d = new Date(
+      start.getTime() + Math.random() * (end.getTime() - start.getTime())
+    );
+    const date = d.toISOString().slice(0, 10);
+    insertScore.run(uid, score, date);
+  }
 }
 
 export function createCustomer(input: CustomerInput) {
@@ -176,8 +258,7 @@ export function getScores() {
         scores.uid,
         scores.score,
         scores.date,
-        customers.name,
-        customers.blood_group AS bloodGroup
+        customers.name
       FROM scores
       LEFT JOIN customers ON customers.uid = scores.uid
       ORDER BY scores.date DESC, scores.id DESC

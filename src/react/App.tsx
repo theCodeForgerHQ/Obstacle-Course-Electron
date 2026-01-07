@@ -39,9 +39,11 @@ type Customer = {
 };
 
 type ScoreRow = {
+  id: number;
   uid: string;
   score: number;
   date: string;
+  name: string;
 };
 
 type LeaderboardRow = {
@@ -84,7 +86,7 @@ function App() {
   const [scores, setScores] = useState<ScoreRow[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([]);
   const [tab, setTab] = useState<TabKey>("customers");
-  const [preset, setPreset] = useState<Preset>("today");
+  const [preset, setPreset] = useState<Preset>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -103,7 +105,7 @@ function App() {
 
   useEffect(() => {
     computeLeaderboard();
-  }, [scores, customers, preset]);
+  }, [scores, preset]);
 
   async function refreshCustomers() {
     setLoading(true);
@@ -139,30 +141,36 @@ function App() {
   function computeLeaderboard() {
     const now = new Date();
     const from = new Date(now);
+
     if (preset === "today") from.setDate(now.getDate() - 1);
     if (preset === "week") from.setDate(now.getDate() - 7);
     if (preset === "month") from.setMonth(now.getMonth() - 1);
     if (preset === "year") from.setFullYear(now.getFullYear() - 1);
     if (preset === "all") from.setFullYear(1970);
-    const totals = new Map<string, number>();
+
+    const totals = new Map<
+      string,
+      { uid: string; name: string; score: number }
+    >();
 
     scores.forEach((s) => {
       if (new Date(s.date) >= from) {
-        totals.set(s.uid, (totals.get(s.uid) ?? 0) + s.score);
+        const prev = totals.get(s.uid);
+        totals.set(s.uid, {
+          uid: s.uid,
+          name: s.name,
+          score: (prev?.score ?? 0) + s.score,
+        });
       }
     });
 
-    const rows = Array.from(totals.entries())
-      .map(([uid, score]) => {
-        const customer = customers.find((c) => c.uid === uid);
-        return {
-          uid,
-          name: customer?.name ?? "Unknown",
-          score,
-        };
-      })
+    const rows = Array.from(totals.values())
       .sort((a, b) => b.score - a.score)
-      .map((r, i) => ({ ...r, rank: i + 1 }));
+      .map((r, i) => ({
+        ...r,
+        rank: i + 1,
+      }));
+
     setLeaderboard(rows);
   }
 
@@ -341,9 +349,9 @@ function App() {
           Leaderboard
         </Button>
       </div>
+
       {tab === "customers" && (
         <>
-          {" "}
           <header className="flex justify-between items-start gap-4 mb-6">
             <div>
               <h1 className="text-3xl font-semibold text-gray-900">
@@ -545,8 +553,13 @@ function App() {
       {tab === "leaderboard" && (
         <>
           <header className="flex justify-between mb-6">
-            <h1 className="text-3xl font-semibold">Leaderboard</h1>
-
+            <div>
+              <h1 className="text-3xl font-semibold">Players Leaderboard</h1>
+              <p className="text-sm text-gray-600 mt-1">
+                View top performers ranked by total score across selected time
+                periods.
+              </p>
+            </div>
             <Select
               value={preset}
               onValueChange={(v) => setPreset(v as Preset)}
@@ -554,55 +567,90 @@ function App() {
               <SelectTrigger className="w-[200px]">
                 <SelectValue />
               </SelectTrigger>
-
               <SelectContent>
                 <SelectItem value="today">Top Today</SelectItem>
-
-                <SelectItem value="week">This Week</SelectItem>
-
-                <SelectItem value="month">This Month</SelectItem>
-
-                <SelectItem value="year">This Year</SelectItem>
-
-                <SelectItem value="all">Since Start</SelectItem>
+                <SelectItem value="week">Top This Week</SelectItem>
+                <SelectItem value="month">Top This Month</SelectItem>
+                <SelectItem value="year">Top This Year</SelectItem>
+                <SelectItem value="all">Top Since Start</SelectItem>
               </SelectContent>
             </Select>
           </header>
-
-          <section className="bg-white border rounded-xl overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr>
-                  <th className="px-4 py-3 text-left">Rank</th>
-
-                  <th className="px-4 py-3 text-left">UID</th>
-
-                  <th className="px-4 py-3 text-left">Name</th>
-
-                  <th className="px-4 py-3 text-right">Score</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {leaderboard.map((row) => (
-                  <tr key={row.uid} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">{row.rank}</td>
-
-                    <td className="px-4 py-3 font-mono">{row.uid}</td>
-
-                    <td className="px-4 py-3">{row.name}</td>
-
-                    <td className="px-4 py-3 text-right font-semibold">
-                      {row.score}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <section className="bg-white border border-gray-200 rounded-xl p-4 mb-4 shadow-sm">
+            <div className="flex flex-row gap-3 justify-between items-center">
+              <label className="text-sm text-gray-700 w-fit shrink-0">
+                Search Player
+              </label>
+              <Input
+                type="search"
+                placeholder="Search by name"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+          </section>
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-sm text-red-800">
+              {error}
+            </div>
+          )}
+          <section className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+            {loading ? (
+              <div className="p-8 text-center text-gray-500">
+                Loading customers…
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[960px]">
+                  <thead className="border-b border-gray-200">
+                    <tr>
+                      <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
+                        Rank
+                      </th>
+                      <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
+                        UID
+                      </th>
+                      <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
+                        Name
+                      </th>
+                      <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
+                        Score
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leaderboard
+                      .filter((row) =>
+                        row.name.toLowerCase().includes(search.toLowerCase())
+                      )
+                      .map((row, idx) => (
+                        <tr
+                          key={row.uid}
+                          className={`cursor-pointer hover:bg-gray-50 transition-colors ${
+                            idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"
+                          }`}
+                        >
+                          <td className="px-4 py-3">
+                            <div className="font-mono text-sm">#{row.rank}</div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="font-mono text-sm">{row.uid}</div>
+                          </td>
+                          <td className="px-4 py-3 font-medium text-sm">
+                            {row.name}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-sm">
+                            {row.score}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         </>
       )}
-
       <Dialog open={showForm} onOpenChange={closeForm}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
