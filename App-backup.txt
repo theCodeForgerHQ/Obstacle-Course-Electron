@@ -18,6 +18,14 @@ import {
   SelectValue,
 } from "./components/ui/select";
 
+declare global {
+  interface Window {
+    api?: {
+      invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
+    };
+  }
+}
+
 type Customer = {
   id: number;
   uid: string;
@@ -106,27 +114,40 @@ function App() {
   }, [bloodFilter, customers, search, sortDir, sortKey]);
 
   useEffect(() => {
-    setLoading(false);
+    // Wait for API to be available
+    const checkAndRefresh = async () => {
+      let retries = 0;
+      const maxRetries = 50; // 5 seconds max with 100ms intervals
 
-    console.log("window.api =", window.api);
-    // Fetch and log customers
-    const fetchCustomers = async () => {
-      try {
-        const customers = await window.api.invoke("getCustomers");
-        console.log("Customers:", customers);
-      } catch (error) {
-        console.error("Error fetching customers:", error);
+      while (!window.api && retries < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        retries++;
       }
+
+      if (!window.api) {
+        setError("API failed to initialize after 5 seconds");
+        setLoading(false);
+        return;
+      }
+
+      refresh();
     };
 
-    fetchCustomers();
+    checkAndRefresh();
   }, []);
 
   async function refresh() {
     setLoading(true);
     setError(null);
     try {
-      setCustomers([]);
+      if (!window.api?.invoke) {
+        console.warn("window.api:", window.api);
+        throw new Error(
+          "API is not available - preload script may not be loaded"
+        );
+      }
+      const rows = await window.api.invoke("db-customers-get-all");
+      setCustomers((rows as Customer[]) ?? []);
     } catch (e) {
       const errorMsg =
         e instanceof Error ? e.message : "Unable to load customers";
@@ -169,6 +190,10 @@ function App() {
     setError(null);
 
     try {
+      if (!window.api?.invoke) {
+        throw new Error("API is not available");
+      }
+
       if (!draft.uid.trim() || !draft.name.trim()) {
         setError("UID and name are required.");
         setSubmitting(false);
@@ -193,6 +218,7 @@ function App() {
         return;
       }
 
+      // Validate UID format (10 digit number)
       if (!/^\d{10}$/.test(draft.uid.trim())) {
         setError("UID must be a 10-digit number");
         setSubmitting(false);
@@ -208,9 +234,9 @@ function App() {
           secondaryPhone: draft.secondaryPhone.trim(),
           bloodGroup: draft.bloodGroup.trim(),
         };
-        console.log("Update customer:", editing.uid, updates);
+        await window.api.invoke("db-customers-update", editing.uid, updates);
       } else {
-        const newCustomer = {
+        await window.api.invoke("db-customers-create", {
           uid: draft.uid.trim(),
           name: draft.name.trim(),
           address: draft.address.trim() || undefined,
@@ -218,8 +244,7 @@ function App() {
           phone: draft.phone.trim(),
           secondaryPhone: draft.secondaryPhone.trim(),
           bloodGroup: draft.bloodGroup.trim(),
-        };
-        console.log("Create customer:", newCustomer);
+        });
       }
 
       await refresh();
@@ -238,7 +263,10 @@ function App() {
     if (!confirmed) return;
     setError(null);
     try {
-      console.log("Delete customer:", uid);
+      if (!window.api?.invoke) {
+        throw new Error("API is not available");
+      }
+      await window.api.invoke("db-customers-delete", uid);
       await refresh();
     } catch (err) {
       console.error(err);

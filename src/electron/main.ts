@@ -1,6 +1,15 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import path from "path";
-import { isDev, initDb } from "./utils.js";
+import {
+  isDev,
+  initDb,
+  getCustomers,
+  getCustomer,
+  createCustomer,
+  updateCustomer,
+  deleteCustomer,
+  getScores,
+} from "./utils.js";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -12,9 +21,15 @@ function createWindow() {
     height: 800,
     webPreferences: {
       contextIsolation: true,
+      nodeIntegration: false,
+      devTools: true,
       preload: path.join(__dirname, "preload.js"),
     },
   });
+
+  if (process.env.NODE_ENV === "development") {
+    mainWindow.webContents.openDevTools({ mode: "detach" });
+  }
 
   if (isDev()) {
     mainWindow.loadURL("http://localhost:5123");
@@ -25,6 +40,16 @@ function createWindow() {
 
 app.whenReady().then(() => {
   initDb();
+
+  ipcMain.handle("customers:getAll", () => getCustomers());
+  ipcMain.handle("customers:get", (_, uid) => getCustomer(uid));
+  ipcMain.handle("customers:create", (_, input) => createCustomer(input));
+  ipcMain.handle("customers:update", (_, uid, updates) =>
+    updateCustomer(uid, updates)
+  );
+  ipcMain.handle("customers:delete", (_, uid) => deleteCustomer(uid));
+  ipcMain.handle("scores:getAll", () => getScores());
+
   createWindow();
 
   app.on("activate", () => {

@@ -4,3 +4,5 @@ contextBridge.exposeInMainWorld("api", {
   invoke: (channel: string, ...args: any[]) =>
     ipcRenderer.invoke(channel, ...args),
 });
+
+console.log("✅ preload loaded");
