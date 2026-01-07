@@ -12,9 +12,9 @@ export interface CustomerInput {
   name: string;
   address?: string;
   dateOfBirth?: string;
-  phone?: string;
-  secondaryPhone?: string;
-  bloodGroup?: string;
+  phone: string;
+  secondaryPhone: string;
+  bloodGroup: string;
 }
 
 export interface CustomerRecord extends CustomerInput {
@@ -40,9 +40,9 @@ export function initDb() {
       address TEXT,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       date_of_birth DATE,
-      phone TEXT,
-      secondary_phone TEXT,
-      blood_group TEXT
+      phone TEXT NOT NULL,
+      secondary_phone TEXT NOT NULL,
+      blood_group TEXT NOT NULL
     );
   `;
 
@@ -78,9 +78,9 @@ export function createCustomer(input: CustomerInput) {
     name: input.name,
     address: input.address ?? null,
     dateOfBirth: input.dateOfBirth ?? null,
-    phone: input.phone ?? null,
-    secondaryPhone: input.secondaryPhone ?? null,
-    bloodGroup: input.bloodGroup ?? null,
+    phone: input.phone,
+    secondaryPhone: input.secondaryPhone,
+    bloodGroup: input.bloodGroup,
   });
 
   return result.lastInsertRowid;

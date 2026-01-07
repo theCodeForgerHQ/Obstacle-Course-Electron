@@ -1,6 +1,22 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
-import "./App.css";
+import { Button } from "./components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./components/ui/dialog";
+import { Input } from "./components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./components/ui/select";
 
 declare global {
   interface Window {
@@ -138,15 +154,35 @@ function App() {
   function closeForm() {
     setShowForm(false);
     setSubmitting(false);
+    setError(null);
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSubmitting(true);
+    setError(null);
 
     try {
       if (!draft.uid.trim() || !draft.name.trim()) {
         setError("UID and name are required.");
+        setSubmitting(false);
+        return;
+      }
+
+      if (!draft.phone.trim()) {
+        setError("Phone is required.");
+        setSubmitting(false);
+        return;
+      }
+
+      if (!draft.secondaryPhone.trim()) {
+        setError("Emergency contact is required.");
+        setSubmitting(false);
+        return;
+      }
+
+      if (!draft.bloodGroup.trim()) {
+        setError("Blood group is required.");
         setSubmitting(false);
         return;
       }
@@ -156,9 +192,9 @@ function App() {
           name: draft.name.trim(),
           address: draft.address.trim() || undefined,
           dateOfBirth: draft.dateOfBirth.trim() || undefined,
-          phone: draft.phone.trim() || undefined,
-          secondaryPhone: draft.secondaryPhone.trim() || undefined,
-          bloodGroup: draft.bloodGroup.trim() || undefined,
+          phone: draft.phone.trim(),
+          secondaryPhone: draft.secondaryPhone.trim(),
+          bloodGroup: draft.bloodGroup.trim(),
         };
         await window.api.invoke("db-customers-update", editing.uid, updates);
       } else {
@@ -167,9 +203,9 @@ function App() {
           name: draft.name.trim(),
           address: draft.address.trim() || undefined,
           dateOfBirth: draft.dateOfBirth.trim() || undefined,
-          phone: draft.phone.trim() || undefined,
-          secondaryPhone: draft.secondaryPhone.trim() || undefined,
-          bloodGroup: draft.bloodGroup.trim() || undefined,
+          phone: draft.phone.trim(),
+          secondaryPhone: draft.secondaryPhone.trim(),
+          bloodGroup: draft.bloodGroup.trim(),
         });
       }
 
@@ -185,6 +221,7 @@ function App() {
   async function handleDelete(uid: string) {
     const confirmed = window.confirm("Delete this customer?");
     if (!confirmed) return;
+    setError(null);
     try {
       await window.api.invoke("db-customers-delete", uid);
       await refresh();
@@ -196,141 +233,200 @@ function App() {
 
   const badge = (value?: string | null) =>
     value ? (
-      <span className="pill">{value}</span>
+      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+        {value}
+      </span>
     ) : (
-      <span className="pill pill-muted">NA</span>
+      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-50 text-gray-400">
+        NA
+      </span>
     );
 
   return (
-    <div className="page">
-      <header className="hero">
+    <div className="min-h-screen p-8 max-w-[1400px] mx-auto">
+      <header className="flex justify-between items-start gap-4 mb-6">
         <div>
-          <p className="eyebrow">RFID customers</p>
-          <h1>Obstacle Course Registry</h1>
-          <p className="lede">
+          <p className="text-xs uppercase tracking-wider text-gray-500 mb-1">
+            RFID customers
+          </p>
+          <h1 className="text-3xl font-semibold text-gray-900">
+            Obstacle Course Registry
+          </h1>
+          <p className="text-sm text-gray-600 mt-1">
             Track entrants, emergency contacts, and blood groups for quick
             access on-site.
           </p>
         </div>
-        <button className="button primary" onClick={openCreate}>
-          Add customer
-        </button>
+        <Button onClick={openCreate}>Add customer</Button>
       </header>
 
-      <section className="panel">
-        <div className="controls">
-          <label className="control">
-            <span>Search</span>
-            <input
+      <section className="bg-white border border-gray-200 rounded-xl p-4 mb-4 shadow-sm">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm text-gray-700">Search</label>
+            <Input
               type="search"
               placeholder="Search by name, UID, phone, address"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-          </label>
-          <label className="control">
-            <span>Blood group</span>
-            <select
-              value={bloodFilter}
-              onChange={(e) => setBloodFilter(e.target.value)}
-            >
-              <option value="all">All</option>
-              {bloodGroups.map((bg) => (
-                <option key={bg} value={bg}>
-                  {bg}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="control">
-            <span>Sort by</span>
-            <div className="sort-row">
-              <select
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm text-gray-700">Blood group</label>
+            <Select value={bloodFilter} onValueChange={setBloodFilter}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                {bloodGroups.map((bg) => (
+                  <SelectItem key={bg} value={bg}>
+                    {bg}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm text-gray-700">Sort by</label>
+            <div className="flex gap-2">
+              <Select
                 value={sortKey}
-                onChange={(e) => setSortKey(e.target.value as SortKey)}
+                onValueChange={(v) => setSortKey(v as SortKey)}
               >
-                <option value="created_at">Joined</option>
-                <option value="name">Name</option>
-                <option value="uid">UID</option>
-              </select>
-              <button
-                className="button ghost"
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="created_at">Joined</SelectItem>
+                  <SelectItem value="name">Name</SelectItem>
+                  <SelectItem value="uid">UID</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="ghost"
                 onClick={() => setSortDir(sortDir === "asc" ? "desc" : "asc")}
+                className="shrink-0"
               >
-                {sortDir === "asc" ? "Asc" : "Desc"}
-              </button>
+                {sortDir === "asc" ? "↑ Asc" : "↓ Desc"}
+              </Button>
             </div>
-          </label>
+          </div>
         </div>
       </section>
 
-      <section className="panel table-panel">
-        {error && <div className="alert">{error}</div>}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-sm text-red-800">
+          {error}
+        </div>
+      )}
+
+      <section className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
         {loading ? (
-          <div className="empty">Loading customers…</div>
+          <div className="p-8 text-center text-gray-500">
+            Loading customers…
+          </div>
         ) : filtered.length === 0 ? (
-          <div className="empty">No customers match your filters.</div>
+          <div className="p-8 text-center text-gray-500">
+            No customers match your filters.
+          </div>
         ) : (
-          <div className="table-scroll">
-            <table className="grid">
-              <thead>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[960px]">
+              <thead className="border-b border-gray-200">
                 <tr>
-                  <th>UID</th>
-                  <th>Name</th>
-                  <th>Address</th>
-                  <th>Joined</th>
-                  <th>DOB</th>
-                  <th>Phone</th>
-                  <th>Emergency</th>
-                  <th>Blood</th>
-                  <th></th>
+                  <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
+                    UID
+                  </th>
+                  <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
+                    Name
+                  </th>
+                  <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
+                    Address
+                  </th>
+                  <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
+                    Joined
+                  </th>
+                  <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
+                    DOB
+                  </th>
+                  <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
+                    Phone
+                  </th>
+                  <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
+                    Emergency
+                  </th>
+                  <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
+                    Blood
+                  </th>
+                  <th className="text-right text-xs font-semibold text-gray-600 px-4 py-3">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((row) => (
-                  <tr key={row.id} onClick={() => openEdit(row)}>
-                    <td>
-                      <div className="mono">{row.uid}</div>
+                {filtered.map((row, idx) => (
+                  <tr
+                    key={row.id}
+                    className={`cursor-pointer hover:bg-gray-50 transition-colors ${
+                      idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"
+                    }`}
+                    onClick={() => openEdit(row)}
+                  >
+                    <td className="px-4 py-3">
+                      <div className="font-mono text-sm">{row.uid}</div>
                     </td>
-                    <td>
-                      <div className="stack">
-                        <strong>{row.name}</strong>
-                        <span className="muted">#{row.id}</span>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-medium text-sm">{row.name}</span>
+                        <span className="text-xs text-gray-400">#{row.id}</span>
                       </div>
                     </td>
-                    <td className="wide">{row.address || "—"}</td>
-                    <td>{new Date(row.created_at).toLocaleDateString()}</td>
-                    <td>{row.dateOfBirth ? row.dateOfBirth : "—"}</td>
-                    <td>
-                      <div className="stack">
-                        <span>{row.phone || "—"}</span>
-                        <span className="muted">Primary</span>
+                    <td className="px-4 py-3 max-w-[200px]">
+                      <div className="text-sm truncate">
+                        {row.address || "—"}
                       </div>
                     </td>
-                    <td>
-                      <div className="stack">
-                        <span>{row.secondaryPhone || "—"}</span>
-                        <span className="muted">Emergency</span>
+                    <td className="px-4 py-3 text-sm">
+                      {new Date(row.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {row.dateOfBirth || "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-sm">{row.phone || "—"}</span>
+                        <span className="text-xs text-gray-400">Primary</span>
                       </div>
                     </td>
-                    <td>{badge(row.bloodGroup)}</td>
-                    <td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-sm">
+                          {row.secondaryPhone || "—"}
+                        </span>
+                        <span className="text-xs text-gray-400">Emergency</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">{badge(row.bloodGroup)}</td>
+                    <td className="px-4 py-3">
                       <div
-                        className="row-actions"
+                        className="flex gap-2 justify-end"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <button
-                          className="button ghost"
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => openEdit(row)}
                         >
                           Edit
-                        </button>
-                        <button
-                          className="button ghost danger"
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
                           onClick={() => handleDelete(row.uid)}
                         >
                           Delete
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -341,125 +437,142 @@ function App() {
         )}
       </section>
 
-      {showForm && (
-        <div className="modal" role="dialog" aria-modal="true">
-          <div className="modal-surface">
-            <div className="modal-head">
-              <div>
-                <p className="eyebrow">
-                  {editing ? "Edit" : "Create"} customer
-                </p>
-                <h2>{editing ? editing.name : "New customer"}</h2>
-              </div>
-              <button className="button ghost" onClick={closeForm}>
-                Close
-              </button>
+      <Dialog open={showForm} onOpenChange={closeForm}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {editing ? "Edit customer" : "New customer"}
+            </DialogTitle>
+            <DialogDescription>
+              {editing
+                ? "Update customer information below."
+                : "Fill in the details to register a new customer."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
+              {error}
             </div>
-            <form className="form" onSubmit={handleSubmit}>
-              <label>
-                <span>UID (RFID)</span>
-                <input
-                  type="text"
-                  value={draft.uid}
-                  onChange={(e) => setDraft({ ...draft, uid: e.target.value })}
-                  placeholder="Scan or enter UID"
-                  disabled={!!editing}
-                  required
-                />
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium">
+                UID (RFID) <span className="text-red-500">*</span>
               </label>
-              <label>
-                <span>Name</span>
-                <input
-                  type="text"
-                  value={draft.name}
-                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                  placeholder="Full name"
-                  required
-                />
+              <Input
+                type="text"
+                value={draft.uid}
+                onChange={(e) => setDraft({ ...draft, uid: e.target.value })}
+                placeholder="Scan or enter UID"
+                disabled={!!editing}
+                required
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium">
+                Name <span className="text-red-500">*</span>
               </label>
-              <label>
-                <span>Address</span>
-                <input
-                  type="text"
-                  value={draft.address}
+              <Input
+                type="text"
+                value={draft.name}
+                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                placeholder="Full name"
+                required
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium">Address</label>
+              <Input
+                type="text"
+                value={draft.address}
+                onChange={(e) =>
+                  setDraft({ ...draft, address: e.target.value })
+                }
+                placeholder="Street, city"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium">Date of birth</label>
+                <Input
+                  type="date"
+                  value={draft.dateOfBirth}
                   onChange={(e) =>
-                    setDraft({ ...draft, address: e.target.value })
+                    setDraft({ ...draft, dateOfBirth: e.target.value })
                   }
-                  placeholder="Street, city"
                 />
-              </label>
-              <div className="form-grid">
-                <label>
-                  <span>Date of birth</span>
-                  <input
-                    type="date"
-                    value={draft.dateOfBirth}
-                    onChange={(e) =>
-                      setDraft({ ...draft, dateOfBirth: e.target.value })
-                    }
-                  />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium">
+                  Blood group <span className="text-red-500">*</span>
                 </label>
-                <label>
-                  <span>Blood group</span>
-                  <select
-                    value={draft.bloodGroup}
-                    onChange={(e) =>
-                      setDraft({ ...draft, bloodGroup: e.target.value })
-                    }
-                  >
-                    <option value="">Select</option>
+                <Select
+                  value={draft.bloodGroup}
+                  onValueChange={(v) => setDraft({ ...draft, bloodGroup: v })}
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select blood group" />
+                  </SelectTrigger>
+                  <SelectContent>
                     {bloodGroups.map((bg) => (
-                      <option key={bg} value={bg}>
+                      <SelectItem key={bg} value={bg}>
                         {bg}
-                      </option>
+                      </SelectItem>
                     ))}
-                  </select>
-                </label>
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="form-grid">
-                <label>
-                  <span>Phone</span>
-                  <input
-                    type="tel"
-                    value={draft.phone}
-                    onChange={(e) =>
-                      setDraft({ ...draft, phone: e.target.value })
-                    }
-                    placeholder="Primary contact"
-                  />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium">
+                  Phone <span className="text-red-500">*</span>
                 </label>
-                <label>
-                  <span>Emergency contact</span>
-                  <input
-                    type="tel"
-                    value={draft.secondaryPhone}
-                    onChange={(e) =>
-                      setDraft({ ...draft, secondaryPhone: e.target.value })
-                    }
-                    placeholder="Secondary contact"
-                  />
+                <Input
+                  type="tel"
+                  value={draft.phone}
+                  onChange={(e) =>
+                    setDraft({ ...draft, phone: e.target.value })
+                  }
+                  placeholder="Primary contact"
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium">
+                  Emergency contact <span className="text-red-500">*</span>
                 </label>
+                <Input
+                  type="tel"
+                  value={draft.secondaryPhone}
+                  onChange={(e) =>
+                    setDraft({ ...draft, secondaryPhone: e.target.value })
+                  }
+                  placeholder="Secondary contact"
+                  required
+                />
               </div>
-              <div className="form-actions">
-                <button
-                  type="button"
-                  className="button ghost"
-                  onClick={closeForm}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="button primary"
-                  disabled={submitting}
-                >
-                  {submitting ? "Saving…" : editing ? "Save changes" : "Create"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="w-full sm:w-auto"
+              >
+                {submitting ? "Saving…" : editing ? "Save changes" : "Create"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
