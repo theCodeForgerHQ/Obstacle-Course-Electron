@@ -106,27 +106,15 @@ function App() {
   }, [bloodFilter, customers, search, sortDir, sortKey]);
 
   useEffect(() => {
-    setLoading(false);
-
-    console.log("window.api =", window.api);
-    // Fetch and log customers
-    const fetchCustomers = async () => {
-      try {
-        const customers = await window.api.invoke("getCustomers");
-        console.log("Customers:", customers);
-      } catch (error) {
-        console.error("Error fetching customers:", error);
-      }
-    };
-
-    fetchCustomers();
+    refresh();
   }, []);
 
   async function refresh() {
     setLoading(true);
     setError(null);
     try {
-      setCustomers([]);
+      const rows: Customer[] = await window.api.invoke("customers:getAll");
+      setCustomers(rows);
     } catch (e) {
       const errorMsg =
         e instanceof Error ? e.message : "Unable to load customers";
@@ -208,7 +196,7 @@ function App() {
           secondaryPhone: draft.secondaryPhone.trim(),
           bloodGroup: draft.bloodGroup.trim(),
         };
-        console.log("Update customer:", editing.uid, updates);
+        await window.api.invoke("customers:update", editing.uid, updates);
       } else {
         const newCustomer = {
           uid: draft.uid.trim(),
@@ -219,7 +207,7 @@ function App() {
           secondaryPhone: draft.secondaryPhone.trim(),
           bloodGroup: draft.bloodGroup.trim(),
         };
-        console.log("Create customer:", newCustomer);
+        await window.api.invoke("customers:create", newCustomer);
       }
 
       await refresh();
@@ -238,7 +226,7 @@ function App() {
     if (!confirmed) return;
     setError(null);
     try {
-      console.log("Delete customer:", uid);
+      await window.api.invoke("customers:delete", uid);
       await refresh();
     } catch (err) {
       console.error(err);
