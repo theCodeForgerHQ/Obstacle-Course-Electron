@@ -1,6 +1,14 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "./components/ui/button";
+
+declare global {
+  interface Window {
+    api: {
+      invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
+    };
+  }
+}
 import {
   Dialog,
   DialogContent,
@@ -113,7 +121,7 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      const rows: Customer[] = await window.api.invoke("customers:getAll");
+      const rows = (await window.api.invoke("customers:getAll")) as Customer[];
       setCustomers(rows);
     } catch (e) {
       const errorMsg =
@@ -251,15 +259,11 @@ function App() {
     <div className="min-h-screen p-8 max-w-[1400px] mx-auto">
       <header className="flex justify-between items-start gap-4 mb-6">
         <div>
-          <p className="text-xs uppercase tracking-wider text-gray-500 mb-1">
-            RFID customers
-          </p>
           <h1 className="text-3xl font-semibold text-gray-900">
             Obstacle Course Registry
           </h1>
           <p className="text-sm text-gray-600 mt-1">
-            Track entrants, emergency contacts, and blood groups for quick
-            access on-site.
+            Track entrants, emergency contacts, and blood groups.
           </p>
         </div>
         <Button onClick={openCreate}>Add customer</Button>
