@@ -1,3 +1,5 @@
+import { dialog } from "electron";
+import fs from "fs";
 import { app, BrowserWindow, ipcMain } from "electron";
 import path from "path";
 import {
@@ -9,6 +11,10 @@ import {
   updateCustomer,
   deleteCustomer,
   getScores,
+  exportCustomersCsv,
+  importCustomersCsv,
+  exportScoresCsv,
+  importScoresCsv,
 } from "./utils.js";
 import { fileURLToPath } from "url";
 
@@ -49,6 +55,58 @@ app.whenReady().then(() => {
   );
   ipcMain.handle("customers:delete", (_, uid) => deleteCustomer(uid));
   ipcMain.handle("scores:getAll", () => getScores());
+
+  ipcMain.handle("customers:exportCsv", async () => {
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: "Export Customers",
+      defaultPath: "customers.csv",
+      filters: [{ name: "CSV", extensions: ["csv"] }],
+    });
+
+    if (canceled || !filePath) return;
+
+    const csv = exportCustomersCsv();
+    fs.writeFileSync(filePath, csv, "utf8");
+  });
+
+  ipcMain.handle("scores:exportCsv", async () => {
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: "Export Scores",
+      defaultPath: "scores.csv",
+      filters: [{ name: "CSV", extensions: ["csv"] }],
+    });
+
+    if (canceled || !filePath) return;
+
+    const csv = exportScoresCsv();
+    fs.writeFileSync(filePath, csv, "utf8");
+  });
+
+  ipcMain.handle("customers:importCsv", async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      title: "Import Customers",
+      filters: [{ name: "CSV", extensions: ["csv"] }],
+      properties: ["openFile"],
+    });
+
+    if (canceled || filePaths.length === 0) return;
+
+    const csv = fs.readFileSync(filePaths[0], "utf8");
+    importCustomersCsv(csv);
+  });
+
+  ipcMain.handle("scores:importCsv", async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      title: "Import Scores",
+      filters: [{ name: "CSV", extensions: ["csv"] }],
+      properties: ["openFile"],
+    });
+
+    if (canceled || filePaths.length === 0) return;
+
+    const csv = fs.readFileSync(filePaths[0], "utf8");
+    importScoresCsv(csv);
+  });
 
   createWindow();
 

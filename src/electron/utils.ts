@@ -188,3 +188,127 @@ export function getScores() {
 export function isDev(): boolean {
   return process.env.NODE_ENV === "development";
 }
+
+function rowsToCsv(rows: any[]): string {
+  if (rows.length === 0) return "";
+  const headers = Object.keys(rows[0]);
+  const lines = [
+    headers.join(","),
+    ...rows.map((r) =>
+      headers.map((h) => JSON.stringify(r[h] ?? "")).join(",")
+    ),
+  ];
+  return lines.join("\n");
+}
+
+function csvToRows(csv: string): any[] {
+  const [headerLine, ...lines] = csv.trim().split("\n");
+  const headers = headerLine.split(",");
+  return lines.map((line) => {
+    const values = JSON.parse("[" + line + "]");
+    return headers.reduce((acc, h, i) => ({ ...acc, [h]: values[i] }), {});
+  });
+}
+
+export function exportCustomersCsv(): string {
+  const rows = db
+    .prepare(
+      `
+        SELECT
+          id,
+          uid,
+          name,
+          address,
+          created_at,
+          date_of_birth AS dateOfBirth,
+          phone,
+          secondary_phone AS secondaryPhone,
+          blood_group AS bloodGroup
+        FROM customers
+      `
+    )
+    .all();
+
+  return rowsToCsv(rows);
+}
+
+export function importCustomersCsv(csv: string) {
+  const rows = csvToRows(csv);
+
+  const stmt = db.prepare(
+    `
+      INSERT OR REPLACE INTO customers (
+        id,
+        uid,
+        name,
+        address,
+        created_at,
+        date_of_birth,
+        phone,
+        secondary_phone,
+        blood_group
+      )
+      VALUES (
+        @id,
+        @uid,
+        @name,
+        @address,
+        @created_at,
+        @dateOfBirth,
+        @phone,
+        @secondaryPhone,
+        @bloodGroup
+      )
+    `
+  );
+
+  const tx = db.transaction(() => {
+    for (const r of rows) stmt.run(r);
+  });
+
+  tx();
+}
+
+export function exportScoresCsv(): string {
+  const rows = db
+    .prepare(
+      `
+        SELECT
+          id,
+          uid,
+          score,
+          date
+        FROM scores
+      `
+    )
+    .all();
+
+  return rowsToCsv(rows);
+}
+
+export function importScoresCsv(csv: string) {
+  const rows = csvToRows(csv);
+
+  const stmt = db.prepare(
+    `
+      INSERT OR REPLACE INTO scores (
+        id,
+        uid,
+        score,
+        date
+      )
+      VALUES (
+        @id,
+        @uid,
+        @score,
+        @date
+      )
+    `
+  );
+
+  const tx = db.transaction(() => {
+    for (const r of rows) stmt.run(r);
+  });
+
+  tx();
+}

@@ -1,6 +1,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "./components/ui/button";
+import { Upload, Download } from "lucide-react";
 
 declare global {
   interface Window {
@@ -319,6 +320,16 @@ function App() {
     }
   }
 
+  async function importCsv(kind: "customers" | "scores") {
+    await window.api.invoke(`${kind}:importCsv`);
+    if (kind === "customers") await refreshCustomers();
+    if (kind === "scores") await refreshScores();
+  }
+
+  async function exportCsv(kind: "customers" | "scores") {
+    await window.api.invoke(`${kind}:exportCsv`);
+  }
+
   const badge = (value?: string | null) =>
     value ? (
       <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
@@ -332,19 +343,65 @@ function App() {
 
   return (
     <div className="min-h-screen p-8 max-w-[1400px] mx-auto">
-      <div className="flex gap-2 mb-6">
-        <Button
-          variant={tab === "customers" ? "default" : "ghost"}
-          onClick={() => setTab("customers")}
-        >
-          Customers
-        </Button>
-        <Button
-          variant={tab === "leaderboard" ? "default" : "ghost"}
-          onClick={() => setTab("leaderboard")}
-        >
-          Leaderboard
-        </Button>
+      <div className="flex flex-wrap items-center gap-2 mb-6">
+        <div className="flex gap-2">
+          <Button
+            variant={tab === "customers" ? "default" : "ghost"}
+            onClick={() => setTab("customers")}
+          >
+            Customers
+          </Button>
+          <Button
+            variant={tab === "leaderboard" ? "default" : "ghost"}
+            onClick={() => setTab("leaderboard")}
+          >
+            Leaderboard
+          </Button>
+        </div>
+
+        <div className="ml-auto flex gap-2">
+          {tab === "customers" && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => exportCsv("customers")}
+              >
+                <Download className="w-4 h-4 mr-1" />
+                Export
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => importCsv("customers")}
+              >
+                <Upload className="w-4 h-4 mr-1" />
+                Import
+              </Button>
+            </>
+          )}
+
+          {tab === "leaderboard" && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => exportCsv("scores")}
+              >
+                <Download className="w-4 h-4 mr-1" />
+                Export
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => importCsv("scores")}
+              >
+                <Upload className="w-4 h-4 mr-1" />
+                Import
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {tab === "customers" && (
