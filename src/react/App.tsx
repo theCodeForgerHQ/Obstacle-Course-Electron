@@ -38,6 +38,19 @@ type Customer = {
   bloodGroup?: string | null;
 };
 
+type ScoreRow = {
+  uid: string;
+  score: number;
+  date: string;
+};
+
+type LeaderboardRow = {
+  uid: string;
+  name: string;
+  score: number;
+  rank: number;
+};
+
 type CustomerDraft = {
   uid: string;
   name: string;
@@ -50,6 +63,9 @@ type CustomerDraft = {
 
 type SortKey = "created_at" | "name" | "uid";
 type SortDir = "asc" | "desc";
+
+type TabKey = "customers" | "leaderboard";
+type Preset = "today" | "week" | "month" | "year" | "all";
 
 const emptyDraft: CustomerDraft = {
   uid: "",
@@ -65,6 +81,10 @@ const bloodGroups = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
 
 function App() {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [scores, setScores] = useState<ScoreRow[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([]);
+  const [tab, setTab] = useState<TabKey>("customers");
+  const [preset, setPreset] = useState<Preset>("today");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -75,6 +95,76 @@ function App() {
   const [draft, setDraft] = useState<CustomerDraft>(emptyDraft);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    refreshCustomers();
+    refreshScores();
+  }, []);
+
+  useEffect(() => {
+    computeLeaderboard();
+  }, [scores, customers, preset]);
+
+  async function refreshCustomers() {
+    setLoading(true);
+    setError(null);
+    try {
+      const rows = (await window.api.invoke("customers:getAll")) as Customer[];
+      setCustomers(rows);
+    } catch (e) {
+      const errorMsg =
+        e instanceof Error ? e.message : "Unable to load customers";
+      setError(errorMsg);
+      console.error("Error loading customers:", e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function refreshScores() {
+    setLoading(true);
+    setError(null);
+    try {
+      const rows = (await window.api.invoke("scores:getAll")) as ScoreRow[];
+      setScores(rows);
+    } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : "Unable to load scores";
+      setError(errorMsg);
+      console.error("Error loading scores:", e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function computeLeaderboard() {
+    const now = new Date();
+    const from = new Date(now);
+    if (preset === "today") from.setDate(now.getDate() - 1);
+    if (preset === "week") from.setDate(now.getDate() - 7);
+    if (preset === "month") from.setMonth(now.getMonth() - 1);
+    if (preset === "year") from.setFullYear(now.getFullYear() - 1);
+    if (preset === "all") from.setFullYear(1970);
+    const totals = new Map<string, number>();
+
+    scores.forEach((s) => {
+      if (new Date(s.date) >= from) {
+        totals.set(s.uid, (totals.get(s.uid) ?? 0) + s.score);
+      }
+    });
+
+    const rows = Array.from(totals.entries())
+      .map(([uid, score]) => {
+        const customer = customers.find((c) => c.uid === uid);
+        return {
+          uid,
+          name: customer?.name ?? "Unknown",
+          score,
+        };
+      })
+      .sort((a, b) => b.score - a.score)
+      .map((r, i) => ({ ...r, rank: i + 1 }));
+    setLeaderboard(rows);
+  }
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -112,26 +202,6 @@ function App() {
 
     return rows;
   }, [bloodFilter, customers, search, sortDir, sortKey]);
-
-  useEffect(() => {
-    refresh();
-  }, []);
-
-  async function refresh() {
-    setLoading(true);
-    setError(null);
-    try {
-      const rows = (await window.api.invoke("customers:getAll")) as Customer[];
-      setCustomers(rows);
-    } catch (e) {
-      const errorMsg =
-        e instanceof Error ? e.message : "Unable to load customers";
-      setError(errorMsg);
-      console.error("Error loading customers:", e);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   function openCreate() {
     setDraft(emptyDraft);
@@ -218,7 +288,7 @@ function App() {
         await window.api.invoke("customers:create", newCustomer);
       }
 
-      await refresh();
+      await refreshCustomers();
       closeForm();
     } catch (err) {
       console.error(err);
@@ -235,7 +305,7 @@ function App() {
     setError(null);
     try {
       await window.api.invoke("customers:delete", uid);
-      await refresh();
+      await refreshCustomers();
     } catch (err) {
       console.error(err);
       const errorMsg =
@@ -257,194 +327,281 @@ function App() {
 
   return (
     <div className="min-h-screen p-8 max-w-[1400px] mx-auto">
-      <header className="flex justify-between items-start gap-4 mb-6">
-        <div>
-          <h1 className="text-3xl font-semibold text-gray-900">
-            Obstacle Course Registry
-          </h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Track entrants, emergency contacts, and blood groups.
-          </p>
-        </div>
-        <Button onClick={openCreate}>Add customer</Button>
-      </header>
-
-      <section className="bg-white border border-gray-200 rounded-xl p-4 mb-4 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm text-gray-700">Search</label>
-            <Input
-              type="search"
-              placeholder="Search by name, UID, phone, address"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm text-gray-700">Blood group</label>
-            <Select value={bloodFilter} onValueChange={setBloodFilter}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                {bloodGroups.map((bg) => (
-                  <SelectItem key={bg} value={bg}>
-                    {bg}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm text-gray-700">Sort by</label>
-            <div className="flex gap-2">
-              <Select
-                value={sortKey}
-                onValueChange={(v) => setSortKey(v as SortKey)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="created_at">Joined</SelectItem>
-                  <SelectItem value="name">Name</SelectItem>
-                  <SelectItem value="uid">UID</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                variant="ghost"
-                onClick={() => setSortDir(sortDir === "asc" ? "desc" : "asc")}
-                className="shrink-0"
-              >
-                {sortDir === "asc" ? "↑ Asc" : "↓ Desc"}
-              </Button>
+      <div className="flex gap-2 mb-6">
+        <Button
+          variant={tab === "customers" ? "default" : "ghost"}
+          onClick={() => setTab("customers")}
+        >
+          Customers
+        </Button>
+        <Button
+          variant={tab === "leaderboard" ? "default" : "ghost"}
+          onClick={() => setTab("leaderboard")}
+        >
+          Leaderboard
+        </Button>
+      </div>
+      {tab === "customers" && (
+        <>
+          {" "}
+          <header className="flex justify-between items-start gap-4 mb-6">
+            <div>
+              <h1 className="text-3xl font-semibold text-gray-900">
+                Obstacle Course Registry
+              </h1>
+              <p className="text-sm text-gray-600 mt-1">
+                Track entrants, emergency contacts, and blood groups.
+              </p>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-sm text-red-800">
-          {error}
-        </div>
+            <Button onClick={openCreate}>Add customer</Button>
+          </header>
+          <section className="bg-white border border-gray-200 rounded-xl p-4 mb-4 shadow-sm">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm text-gray-700">Search</label>
+                <Input
+                  type="search"
+                  placeholder="Search by name, UID, phone, address"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm text-gray-700">Blood group</label>
+                <Select value={bloodFilter} onValueChange={setBloodFilter}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {bloodGroups.map((bg) => (
+                      <SelectItem key={bg} value={bg}>
+                        {bg}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm text-gray-700">Sort by</label>
+                <div className="flex gap-2">
+                  <Select
+                    value={sortKey}
+                    onValueChange={(v) => setSortKey(v as SortKey)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="created_at">Joined</SelectItem>
+                      <SelectItem value="name">Name</SelectItem>
+                      <SelectItem value="uid">UID</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="ghost"
+                    onClick={() =>
+                      setSortDir(sortDir === "asc" ? "desc" : "asc")
+                    }
+                    className="shrink-0"
+                  >
+                    {sortDir === "asc" ? "↑ Asc" : "↓ Desc"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </section>
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-sm text-red-800">
+              {error}
+            </div>
+          )}
+          <section className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+            {loading ? (
+              <div className="p-8 text-center text-gray-500">
+                Loading customers…
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                No customers match your filters.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[960px]">
+                  <thead className="border-b border-gray-200">
+                    <tr>
+                      <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
+                        UID
+                      </th>
+                      <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
+                        Name
+                      </th>
+                      <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
+                        Address
+                      </th>
+                      <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
+                        Joined
+                      </th>
+                      <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
+                        DOB
+                      </th>
+                      <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
+                        Phone
+                      </th>
+                      <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
+                        Emergency
+                      </th>
+                      <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
+                        Blood
+                      </th>
+                      <th className="text-right text-xs font-semibold text-gray-600 px-4 py-3">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((row, idx) => (
+                      <tr
+                        key={row.id}
+                        className={`cursor-pointer hover:bg-gray-50 transition-colors ${
+                          idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"
+                        }`}
+                        onClick={() => openEdit(row)}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="font-mono text-sm">{row.uid}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-medium text-sm">
+                              {row.name}
+                            </span>
+                            <span className="text-xs text-gray-400">
+                              #{row.id}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 max-w-[200px]">
+                          <div className="text-sm truncate">
+                            {row.address || "—"}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {new Date(row.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {row.dateOfBirth || "—"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-sm">{row.phone || "—"}</span>
+                            <span className="text-xs text-gray-400">
+                              Primary
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-sm">
+                              {row.secondaryPhone || "—"}
+                            </span>
+                            <span className="text-xs text-gray-400">
+                              Emergency
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">{badge(row.bloodGroup)}</td>
+                        <td className="px-4 py-3">
+                          <div
+                            className="flex gap-2 justify-end"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEdit(row)}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDelete(row.uid)}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </>
       )}
 
-      <section className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-gray-500">
-            Loading customers…
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            No customers match your filters.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[960px]">
-              <thead className="border-b border-gray-200">
+      {tab === "leaderboard" && (
+        <>
+          <header className="flex justify-between mb-6">
+            <h1 className="text-3xl font-semibold">Leaderboard</h1>
+
+            <Select
+              value={preset}
+              onValueChange={(v) => setPreset(v as Preset)}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+
+              <SelectContent>
+                <SelectItem value="today">Top Today</SelectItem>
+
+                <SelectItem value="week">This Week</SelectItem>
+
+                <SelectItem value="month">This Month</SelectItem>
+
+                <SelectItem value="year">This Year</SelectItem>
+
+                <SelectItem value="all">Since Start</SelectItem>
+              </SelectContent>
+            </Select>
+          </header>
+
+          <section className="bg-white border rounded-xl overflow-hidden">
+            <table className="w-full">
+              <thead>
                 <tr>
-                  <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
-                    UID
-                  </th>
-                  <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
-                    Name
-                  </th>
-                  <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
-                    Address
-                  </th>
-                  <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
-                    Joined
-                  </th>
-                  <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
-                    DOB
-                  </th>
-                  <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
-                    Phone
-                  </th>
-                  <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
-                    Emergency
-                  </th>
-                  <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
-                    Blood
-                  </th>
-                  <th className="text-right text-xs font-semibold text-gray-600 px-4 py-3">
-                    Actions
-                  </th>
+                  <th className="px-4 py-3 text-left">Rank</th>
+
+                  <th className="px-4 py-3 text-left">UID</th>
+
+                  <th className="px-4 py-3 text-left">Name</th>
+
+                  <th className="px-4 py-3 text-right">Score</th>
                 </tr>
               </thead>
+
               <tbody>
-                {filtered.map((row, idx) => (
-                  <tr
-                    key={row.id}
-                    className={`cursor-pointer hover:bg-gray-50 transition-colors ${
-                      idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"
-                    }`}
-                    onClick={() => openEdit(row)}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="font-mono text-sm">{row.uid}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-medium text-sm">{row.name}</span>
-                        <span className="text-xs text-gray-400">#{row.id}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 max-w-[200px]">
-                      <div className="text-sm truncate">
-                        {row.address || "—"}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      {new Date(row.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      {row.dateOfBirth || "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-sm">{row.phone || "—"}</span>
-                        <span className="text-xs text-gray-400">Primary</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-sm">
-                          {row.secondaryPhone || "—"}
-                        </span>
-                        <span className="text-xs text-gray-400">Emergency</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">{badge(row.bloodGroup)}</td>
-                    <td className="px-4 py-3">
-                      <div
-                        className="flex gap-2 justify-end"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEdit(row)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDelete(row.uid)}
-                        >
-                          Delete
-                        </Button>
-                      </div>
+                {leaderboard.map((row) => (
+                  <tr key={row.uid} className="hover:bg-gray-50">
+                    <td className="px-4 py-3">{row.rank}</td>
+
+                    <td className="px-4 py-3 font-mono">{row.uid}</td>
+
+                    <td className="px-4 py-3">{row.name}</td>
+
+                    <td className="px-4 py-3 text-right font-semibold">
+                      {row.score}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        )}
-      </section>
+          </section>
+        </>
+      )}
 
       <Dialog open={showForm} onOpenChange={closeForm}>
         <DialogContent className="max-w-2xl">
