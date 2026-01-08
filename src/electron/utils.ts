@@ -32,6 +32,9 @@ export interface CustomerUpdate {
 }
 
 export function initDb() {
+  db.prepare("DROP TABLE IF EXISTS scores").run();
+  db.prepare("DROP TABLE IF EXISTS customers").run();
+
   const createCustomersTable = `
     CREATE TABLE IF NOT EXISTS customers (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,6 +64,8 @@ export function initDb() {
   db.prepare(
     "CREATE INDEX IF NOT EXISTS idx_scores_uid_date ON scores (uid, date)"
   ).run();
+
+  seedCustomers();
 }
 
 export function createCustomer(input: CustomerInput) {
@@ -361,4 +366,136 @@ export function importScoresCsv(csv: string) {
   });
 
   tx();
+}
+
+function seedCustomers() {
+  const customers: CustomerInput[] = [
+    {
+      uid: "1000000001",
+      name: "John Doe #1",
+      address: "John Doe #1 Street",
+      dateOfBirth: "01-01-1990",
+      phone: "5550000001",
+      secondaryPhone: "5551000001",
+      bloodGroup: "O+",
+    },
+    {
+      uid: "1000000002",
+      name: "John Doe #2",
+      address: "John Doe #2 Street",
+      dateOfBirth: "02-01-1990",
+      phone: "5550000002",
+      secondaryPhone: "5551000002",
+      bloodGroup: "A+",
+    },
+    {
+      uid: "1000000003",
+      name: "John Doe #3",
+      address: "John Doe #3 Street",
+      dateOfBirth: "03-01-1990",
+      phone: "5550000003",
+      secondaryPhone: "5551000003",
+      bloodGroup: "B+",
+    },
+    {
+      uid: "1000000004",
+      name: "John Doe #4",
+      address: "John Doe #4 Street",
+      dateOfBirth: "04-01-1990",
+      phone: "5550000004",
+      secondaryPhone: "5551000004",
+      bloodGroup: "AB+",
+    },
+    {
+      uid: "1000000005",
+      name: "John Doe #5",
+      address: "John Doe #5 Street",
+      dateOfBirth: "05-01-1990",
+      phone: "5550000005",
+      secondaryPhone: "5551000005",
+      bloodGroup: "O-",
+    },
+    {
+      uid: "1000000006",
+      name: "John Doe #6",
+      address: "John Doe #6 Street",
+      dateOfBirth: "06-01-1990",
+      phone: "5550000006",
+      secondaryPhone: "5551000006",
+      bloodGroup: "A-",
+    },
+    {
+      uid: "1000000007",
+      name: "John Doe #7",
+      address: "John Doe #7 Street",
+      dateOfBirth: "07-01-1990",
+      phone: "5550000007",
+      secondaryPhone: "5551000007",
+      bloodGroup: "B-",
+    },
+    {
+      uid: "1000000008",
+      name: "John Doe #8",
+      address: "John Doe #8 Street",
+      dateOfBirth: "08-01-1990",
+      phone: "5550000008",
+      secondaryPhone: "5551000008",
+      bloodGroup: "AB-",
+    },
+    {
+      uid: "1000000009",
+      name: "John Doe #9",
+      address: "John Doe #9 Street",
+      dateOfBirth: "09-01-1990",
+      phone: "5550000009",
+      secondaryPhone: "5551000009",
+      bloodGroup: "O+",
+    },
+    {
+      uid: "1000000010",
+      name: "John Doe #10",
+      address: "John Doe #10 Street",
+      dateOfBirth: "10-01-1990",
+      phone: "5550000010",
+      secondaryPhone: "5551000010",
+      bloodGroup: "A+",
+    },
+  ];
+
+  const insert = db.prepare(`
+    INSERT INTO customers (
+      uid, name, address, date_of_birth, phone, secondary_phone, blood_group
+    ) VALUES (@uid, @name, @address, @dateOfBirth, @phone, @secondaryPhone, @bloodGroup)
+  `);
+
+  const tx = db.transaction(() => {
+    for (const c of customers) insert.run(c);
+  });
+
+  tx();
+
+  const insertScore = db.prepare(`
+    INSERT INTO scores (uid, score, date) VALUES (?, ?, ?)
+  `);
+
+  insertScore.run("1000000001", 85, "01-01-2026");
+  insertScore.run("1000000001", 92, "02-01-2026");
+  insertScore.run("1000000002", 78, "01-01-2026");
+  insertScore.run("1000000002", 88, "02-01-2026");
+  insertScore.run("1000000003", 95, "01-01-2026");
+  insertScore.run("1000000003", 90, "02-01-2026");
+  insertScore.run("1000000004", 72, "01-01-2026");
+  insertScore.run("1000000004", 80, "02-01-2026");
+  insertScore.run("1000000005", 88, "01-01-2026");
+  insertScore.run("1000000005", 91, "02-01-2026");
+  insertScore.run("1000000006", 76, "01-01-2026");
+  insertScore.run("1000000006", 84, "02-01-2026");
+  insertScore.run("1000000007", 93, "01-01-2026");
+  insertScore.run("1000000007", 87, "02-01-2026");
+  insertScore.run("1000000008", 81, "01-01-2026");
+  insertScore.run("1000000008", 89, "02-01-2026");
+  insertScore.run("1000000009", 79, "01-01-2026");
+  insertScore.run("1000000009", 86, "02-01-2026");
+  insertScore.run("1000000010", 94, "01-01-2026");
+  insertScore.run("1000000010", 96, "02-01-2026");
 }

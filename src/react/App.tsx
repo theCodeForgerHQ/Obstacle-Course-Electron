@@ -535,23 +535,16 @@ function App() {
                         <td className="px-4 py-3">
                           <div className="font-mono text-sm">{row.uid}</div>
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="flex flex-col gap-0.5">
-                            <span className="font-medium text-sm">
+                        <td className="px-4 py-3 font-medium text-sm whitespace-nowrap">
                               {row.name}
-                            </span>
-                            <span className="text-xs text-gray-400">
-                              #{row.id}
-                            </span>
-                          </div>
                         </td>
                         <td className="px-4 py-3 max-w-[200px]">
                           <div className="text-sm truncate">
                             {row.address || "—"}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-sm">
-                          {new Date(row.created_at).toLocaleDateString()}
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">
+                          {new Date(row.created_at).toLocaleDateString().replace(/\//g, "-")}
                         </td>
                         <td className="px-4 py-3 text-sm whitespace-nowrap">
                           {row.dateOfBirth || "—"}
@@ -720,7 +713,7 @@ function App() {
             </DialogTitle>
             <DialogDescription>
               {editing
-                ? "Update Participant information below."
+                ? "Update Participant Information below."
                 : "Fill in the details to register a new Participant."}
             </DialogDescription>
           </DialogHeader>
@@ -754,7 +747,7 @@ function App() {
                 type="text"
                 value={draft.name}
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                placeholder="Full name"
+                placeholder="Full Name"
                 required
               />
             </div>
@@ -776,10 +769,27 @@ function App() {
                 <label className="text-sm font-medium">Date of birth</label>
                 <Input
                   type="date"
-                  value={draft.dateOfBirth}
-                  onChange={(e) =>
-                    setDraft({ ...draft, dateOfBirth: e.target.value })
+                  max={new Date().toISOString().split("T")[0]}
+                  value={
+                    draft.dateOfBirth
+                      ? draft.dateOfBirth.split("-").reverse().join("-")
+                      : ""
                   }
+                  onChange={(e) => {
+                    const iso = e.target.value;
+                    if (!iso) {
+                      setDraft({ ...draft, dateOfBirth: "" });
+                      return;
+                    }
+
+                    const todayIso = new Date().toISOString().split("T")[0];
+                    if (iso > todayIso) return;
+
+                    setDraft({
+                      ...draft,
+                      dateOfBirth: iso.split("-").reverse().join("-"),
+                    });
+                  }}
                 />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -792,7 +802,7 @@ function App() {
                   required
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select blood group" />
+                    <SelectValue placeholder="Select Blood Group" />
                   </SelectTrigger>
                   <SelectContent>
                     {bloodGroups.map((bg) => (
@@ -842,7 +852,7 @@ function App() {
                 disabled={submitting}
                 className="w-full sm:w-auto"
               >
-                {submitting ? "Saving…" : editing ? "Save" : "Registet"}
+                {submitting ? "Saving…" : editing ? "Save" : "Register"}
               </Button>
             </DialogFooter>
           </form>

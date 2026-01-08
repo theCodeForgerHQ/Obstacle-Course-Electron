@@ -21,10 +21,13 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+app.setName("Obstacle Course");
+
 function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1000,
     height: 800,
+    title: "Obstacle Course",
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -58,8 +61,8 @@ app.whenReady().then(() => {
 
   ipcMain.handle("customers:exportCsv", async () => {
     const { canceled, filePath } = await dialog.showSaveDialog({
-      title: "Export Customers",
-      defaultPath: "customers.csv",
+      title: "Export Participants",
+      defaultPath: "participants.csv",
       filters: [{ name: "CSV", extensions: ["csv"] }],
     });
 
@@ -84,7 +87,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle("customers:importCsv", async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({
-      title: "Import Customers",
+      title: "Import Participants",
       filters: [{ name: "CSV", extensions: ["csv"] }],
       properties: ["openFile"],
     });
