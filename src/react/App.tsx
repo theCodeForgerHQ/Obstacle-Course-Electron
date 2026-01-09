@@ -136,7 +136,7 @@ function App() {
     if (preset === "week") from.setDate(now.getDate() - 7);
     if (preset === "month") from.setMonth(now.getMonth() - 1);
     if (preset === "year") from.setFullYear(now.getFullYear() - 1);
-    if (preset === "all") from.setFullYear(1970);
+    if (preset === "all") from.setFullYear(2025);
 
     const totals = new Map<
       number,
