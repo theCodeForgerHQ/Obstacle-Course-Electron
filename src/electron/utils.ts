@@ -8,7 +8,6 @@ const db = new Database(dbPath);
 db.pragma("foreign_keys = ON");
 
 export interface CustomerInput {
-  uid: string;
   name: string;
   address?: string;
   dateOfBirth?: string;
@@ -38,7 +37,6 @@ export function initDb() {
   const createCustomersTable = `
     CREATE TABLE IF NOT EXISTS customers (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      uid TEXT NOT NULL UNIQUE,
       name TEXT NOT NULL,
       address TEXT,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -52,17 +50,17 @@ export function initDb() {
   const createScoresTable = `
     CREATE TABLE IF NOT EXISTS scores (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      uid TEXT NOT NULL,
+      customer_id INTEGER NOT NULL,
       score INTEGER NOT NULL DEFAULT 0,
       date DATE NOT NULL DEFAULT (DATE('now')),
-      FOREIGN KEY (uid) REFERENCES customers(uid) ON DELETE CASCADE ON UPDATE CASCADE
+      FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE ON UPDATE CASCADE
     );
   `;
 
   db.prepare(createCustomersTable).run();
   db.prepare(createScoresTable).run();
   db.prepare(
-    "CREATE INDEX IF NOT EXISTS idx_scores_uid_date ON scores (uid, date)"
+    "CREATE INDEX IF NOT EXISTS idx_scores_customer_id_date ON scores (customer_id, date)"
   ).run();
 
   seedCustomers();
@@ -72,14 +70,13 @@ export function createCustomer(input: CustomerInput) {
   const stmt = db.prepare(
     `
       INSERT INTO customers (
-        uid, name, address, date_of_birth, phone, secondary_phone, blood_group
+        name, address, date_of_birth, phone, secondary_phone, blood_group
       )
-      VALUES (@uid, @name, @address, @dateOfBirth, @phone, @secondaryPhone, @bloodGroup)
+      VALUES (@name, @address, @dateOfBirth, @phone, @secondaryPhone, @bloodGroup)
     `
   );
 
   const result = stmt.run({
-    uid: input.uid,
     name: input.name,
     address: input.address ?? null,
     dateOfBirth: input.dateOfBirth ?? null,
@@ -91,12 +88,11 @@ export function createCustomer(input: CustomerInput) {
   return result.lastInsertRowid;
 }
 
-export function getCustomer(uid: string): CustomerRecord | undefined {
+export function getCustomer(id: number): CustomerRecord | undefined {
   const stmt = db.prepare(
     `
       SELECT
         id,
-        uid,
         name,
         address,
         created_at,
@@ -105,12 +101,12 @@ export function getCustomer(uid: string): CustomerRecord | undefined {
         secondary_phone AS secondaryPhone,
         blood_group AS bloodGroup
       FROM customers
-      WHERE uid = ?
+      WHERE id = ?
       LIMIT 1
     `
   );
 
-  return stmt.get(uid) as CustomerRecord | undefined;
+  return stmt.get(id) as CustomerRecord | undefined;
 }
 
 export function getCustomers(): CustomerRecord[] {
@@ -118,7 +114,6 @@ export function getCustomers(): CustomerRecord[] {
     `
       SELECT
         id,
-        uid,
         name,
         address,
         created_at,
@@ -134,7 +129,7 @@ export function getCustomers(): CustomerRecord[] {
   return stmt.all() as CustomerRecord[];
 }
 
-export function updateCustomer(uid: string, updates: CustomerUpdate): number {
+export function updateCustomer(id: number, updates: CustomerUpdate): number {
   const columnMap: Record<keyof CustomerUpdate, string> = {
     name: "name",
     address: "address",
@@ -155,22 +150,25 @@ export function updateCustomer(uid: string, updates: CustomerUpdate): number {
   const setClauses = entries.map(([key]) => `${columnMap[key]} = @${key}`);
 
   const stmt = db.prepare(
-    `UPDATE customers SET ${setClauses.join(", ")} WHERE uid = @uid`
+    `UPDATE customers SET ${setClauses.join(", ")} WHERE id = @id`
   );
 
   const params = entries.reduce(
     (acc, [key, value]) => ({ ...acc, [key]: value ?? null }),
-    { uid }
+    { id }
   );
 
   const result = stmt.run(params);
   return result.changes;
 }
 
-export function deleteCustomer(uid: string) {
-  const stmt = db.prepare(`DELETE FROM customers WHERE uid = ?`);
-  const result = stmt.run(uid);
-  return result.changes;
+export function deleteCustomer(id: number) {
+  const stmt = db.prepare(`DELETE FROM customers WHERE id = ?`);
+  const result = stmt.run(id);
+  const stmt0 = db.prepare(`DELETE FROM scores WHERE customer_id = ?`);
+  const result0 = stmt0.run(id);
+  console.log(result0);
+  return result0.changes;
 }
 
 export function getScores() {
@@ -178,12 +176,12 @@ export function getScores() {
     `
       SELECT
         scores.id,
-        scores.uid,
+        scores.customer_id,
         scores.score,
         scores.date,
         customers.name
       FROM scores
-      LEFT JOIN customers ON customers.uid = scores.uid
+      LEFT JOIN customers ON customers.id = scores.customer_id
       ORDER BY scores.date DESC, scores.id DESC
     `
   );
@@ -257,7 +255,6 @@ export function exportCustomersCsv(): string {
       `
         SELECT
           id,
-          uid,
           name,
           address,
           created_at,
@@ -280,7 +277,6 @@ export function importCustomersCsv(csv: string) {
     `
       INSERT OR REPLACE INTO customers (
         id,
-        uid,
         name,
         address,
         created_at,
@@ -291,7 +287,6 @@ export function importCustomersCsv(csv: string) {
       )
       VALUES (
         @id,
-        @uid,
         @name,
         @address,
         @created_at,
@@ -305,11 +300,10 @@ export function importCustomersCsv(csv: string) {
 
   const tx = db.transaction(() => {
     for (const r of rows) {
-      if (!r.uid || !r.name) continue;
+      if (!r.name) continue;
 
       stmt.run({
         id: r.id ? Number(r.id) : null,
-        uid: r.uid.trim(),
         name: r.name.trim(),
         address: r.address ? r.address.trim() : null,
         created_at: r.created_at || null,
@@ -330,7 +324,7 @@ export function exportScoresCsv(): string {
       `
         SELECT
           id,
-          uid,
+          customer_id,
           score,
           date
         FROM scores
@@ -348,13 +342,13 @@ export function importScoresCsv(csv: string) {
     `
       INSERT OR REPLACE INTO scores (
         id,
-        uid,
+        customer_id,
         score,
         date
       )
       VALUES (
         @id,
-        @uid,
+        @customer_id,
         @score,
         @date
       )
@@ -371,7 +365,6 @@ export function importScoresCsv(csv: string) {
 function seedCustomers() {
   const customers: CustomerInput[] = [
     {
-      uid: "1000000001",
       name: "John Doe #1",
       address: "John Doe #1 Street",
       dateOfBirth: "01-01-1990",
@@ -380,7 +373,6 @@ function seedCustomers() {
       bloodGroup: "O+",
     },
     {
-      uid: "1000000002",
       name: "John Doe #2",
       address: "John Doe #2 Street",
       dateOfBirth: "02-01-1990",
@@ -389,7 +381,6 @@ function seedCustomers() {
       bloodGroup: "A+",
     },
     {
-      uid: "1000000003",
       name: "John Doe #3",
       address: "John Doe #3 Street",
       dateOfBirth: "03-01-1990",
@@ -398,7 +389,6 @@ function seedCustomers() {
       bloodGroup: "B+",
     },
     {
-      uid: "1000000004",
       name: "John Doe #4",
       address: "John Doe #4 Street",
       dateOfBirth: "04-01-1990",
@@ -407,7 +397,6 @@ function seedCustomers() {
       bloodGroup: "AB+",
     },
     {
-      uid: "1000000005",
       name: "John Doe #5",
       address: "John Doe #5 Street",
       dateOfBirth: "05-01-1990",
@@ -416,7 +405,6 @@ function seedCustomers() {
       bloodGroup: "O-",
     },
     {
-      uid: "1000000006",
       name: "John Doe #6",
       address: "John Doe #6 Street",
       dateOfBirth: "06-01-1990",
@@ -425,7 +413,6 @@ function seedCustomers() {
       bloodGroup: "A-",
     },
     {
-      uid: "1000000007",
       name: "John Doe #7",
       address: "John Doe #7 Street",
       dateOfBirth: "07-01-1990",
@@ -434,7 +421,6 @@ function seedCustomers() {
       bloodGroup: "B-",
     },
     {
-      uid: "1000000008",
       name: "John Doe #8",
       address: "John Doe #8 Street",
       dateOfBirth: "08-01-1990",
@@ -443,7 +429,6 @@ function seedCustomers() {
       bloodGroup: "AB-",
     },
     {
-      uid: "1000000009",
       name: "John Doe #9",
       address: "John Doe #9 Street",
       dateOfBirth: "09-01-1990",
@@ -452,7 +437,6 @@ function seedCustomers() {
       bloodGroup: "O+",
     },
     {
-      uid: "1000000010",
       name: "John Doe #10",
       address: "John Doe #10 Street",
       dateOfBirth: "10-01-1990",
@@ -464,8 +448,8 @@ function seedCustomers() {
 
   const insert = db.prepare(`
     INSERT INTO customers (
-      uid, name, address, date_of_birth, phone, secondary_phone, blood_group
-    ) VALUES (@uid, @name, @address, @dateOfBirth, @phone, @secondaryPhone, @bloodGroup)
+      name, address, date_of_birth, phone, secondary_phone, blood_group
+    ) VALUES (@name, @address, @dateOfBirth, @phone, @secondaryPhone, @bloodGroup)
   `);
 
   const tx = db.transaction(() => {
@@ -475,27 +459,27 @@ function seedCustomers() {
   tx();
 
   const insertScore = db.prepare(`
-    INSERT INTO scores (uid, score, date) VALUES (?, ?, ?)
+    INSERT INTO scores (customer_id, score, date) VALUES (?, ?, ?)
   `);
 
-  insertScore.run("1000000001", 85, "01-01-2026");
-  insertScore.run("1000000001", 92, "02-01-2026");
-  insertScore.run("1000000002", 78, "01-01-2026");
-  insertScore.run("1000000002", 88, "02-01-2026");
-  insertScore.run("1000000003", 95, "01-01-2026");
-  insertScore.run("1000000003", 90, "02-01-2026");
-  insertScore.run("1000000004", 72, "01-01-2026");
-  insertScore.run("1000000004", 80, "02-01-2026");
-  insertScore.run("1000000005", 88, "01-01-2026");
-  insertScore.run("1000000005", 91, "02-01-2026");
-  insertScore.run("1000000006", 76, "01-01-2026");
-  insertScore.run("1000000006", 84, "02-01-2026");
-  insertScore.run("1000000007", 93, "01-01-2026");
-  insertScore.run("1000000007", 87, "02-01-2026");
-  insertScore.run("1000000008", 81, "01-01-2026");
-  insertScore.run("1000000008", 89, "02-01-2026");
-  insertScore.run("1000000009", 79, "01-01-2026");
-  insertScore.run("1000000009", 86, "02-01-2026");
-  insertScore.run("1000000010", 94, "01-01-2026");
-  insertScore.run("1000000010", 96, "02-01-2026");
+  insertScore.run(1, 85, "01-01-2026");
+  insertScore.run(1, 92, "02-01-2026");
+  insertScore.run(2, 78, "01-01-2026");
+  insertScore.run(2, 88, "02-01-2026");
+  insertScore.run(3, 95, "01-01-2026");
+  insertScore.run(3, 90, "02-01-2026");
+  insertScore.run(4, 72, "01-01-2026");
+  insertScore.run(4, 80, "02-01-2026");
+  insertScore.run(5, 88, "01-01-2026");
+  insertScore.run(5, 91, "02-01-2026");
+  insertScore.run(6, 76, "01-01-2026");
+  insertScore.run(6, 84, "02-01-2026");
+  insertScore.run(7, 93, "01-01-2026");
+  insertScore.run(7, 87, "02-01-2026");
+  insertScore.run(8, 81, "01-01-2026");
+  insertScore.run(8, 89, "02-01-2026");
+  insertScore.run(9, 79, "01-01-2026");
+  insertScore.run(9, 86, "02-01-2026");
+  insertScore.run(10, 94, "01-01-2026");
+  insertScore.run(10, 96, "02-01-2026");
 }

@@ -29,7 +29,6 @@ import {
 
 type Customer = {
   id: number;
-  uid: string;
   name: string;
   address?: string | null;
   created_at: string;
@@ -41,21 +40,13 @@ type Customer = {
 
 type ScoreRow = {
   id: number;
-  uid: string;
+  customer_id: number;
   score: number;
   date: string;
   name: string;
 };
 
-type LeaderboardRow = {
-  uid: string;
-  name: string;
-  score: number;
-  rank: number;
-};
-
 type CustomerDraft = {
-  uid: string;
   name: string;
   address: string;
   dateOfBirth: string;
@@ -64,14 +55,13 @@ type CustomerDraft = {
   bloodGroup: string;
 };
 
-type SortKey = "created_at" | "name" | "uid";
+type SortKey = "created_at" | "name" | "id";
 type SortDir = "asc" | "desc";
 
 type TabKey = "customers" | "leaderboard";
 type Preset = "today" | "week" | "month" | "year" | "all";
 
 const emptyDraft: CustomerDraft = {
-  uid: "",
   name: "",
   address: "",
   dateOfBirth: "",
@@ -149,15 +139,15 @@ function App() {
     if (preset === "all") from.setFullYear(1970);
 
     const totals = new Map<
-      string,
-      { uid: string; name: string; score: number }
+      number,
+      { customer_id: number; name: string; score: number }
     >();
 
     scores.forEach((s) => {
       if (new Date(s.date) >= from) {
-        const prev = totals.get(s.uid);
-        totals.set(s.uid, {
-          uid: s.uid,
+        const prev = totals.get(s.customer_id);
+        totals.set(s.customer_id, {
+          customer_id: s.customer_id,
           name: s.name,
           score: (prev?.score ?? 0) + s.score,
         });
@@ -176,7 +166,7 @@ function App() {
     const term = customerSearch.trim().toLowerCase();
     let rows = customers.filter((c) => {
       const haystack = [
-        c.uid,
+        c.id,
         c.name,
         c.address ?? "",
         c.phone ?? "",
@@ -218,7 +208,6 @@ function App() {
   function openEdit(row: Customer) {
     setEditing(row);
     setDraft({
-      uid: row.uid,
       name: row.name,
       address: row.address ?? "",
       dateOfBirth: row.dateOfBirth ?? "",
@@ -241,8 +230,8 @@ function App() {
     setFormError(null);
 
     try {
-      if (!draft.uid.trim() || !draft.name.trim()) {
-        setFormError("UID and name are required.");
+      if (!draft.name.trim()) {
+        setFormError("Participant Name is required.");
         setSubmitting(false);
         return;
       }
@@ -265,12 +254,6 @@ function App() {
         return;
       }
 
-      if (!/^\d{10}$/.test(draft.uid.trim())) {
-        setFormError("UID must be a 10-digit number");
-        setSubmitting(false);
-        return;
-      }
-
       if (editing) {
         const updates = {
           name: draft.name.trim(),
@@ -280,10 +263,9 @@ function App() {
           secondaryPhone: draft.secondaryPhone.trim(),
           bloodGroup: draft.bloodGroup.trim(),
         };
-        await window.api.invoke("customers:update", editing.uid, updates);
+        await window.api.invoke("customers:update", editing.id, updates);
       } else {
         const newCustomer = {
-          uid: draft.uid.trim(),
           name: draft.name.trim(),
           address: draft.address.trim() || undefined,
           dateOfBirth: draft.dateOfBirth.trim() || undefined,
@@ -305,13 +287,14 @@ function App() {
     }
   }
 
-  async function handleDelete(uid: string) {
+  async function handleDelete(id: number) {
     const confirmed = window.confirm("Delete this Participant?");
     if (!confirmed) return;
     setCustomerError(null);
     try {
-      await window.api.invoke("customers:delete", uid);
+      await window.api.invoke("customers:delete", id);
       await refreshCustomers();
+      await refreshScores();
     } catch (err) {
       console.error(err);
       const errorMsg =
@@ -423,7 +406,7 @@ function App() {
                 <label className="text-sm text-gray-700">Search</label>
                 <Input
                   type="search"
-                  placeholder="Search by Name, UID, Phone, Address"
+                  placeholder="Search by Name, ID, Phone, Address"
                   value={customerSearch}
                   onChange={(e) => setCustomerSearch(e.target.value)}
                 />
@@ -459,7 +442,7 @@ function App() {
                         Date Registered
                       </SelectItem>
                       <SelectItem value="name">Name</SelectItem>
-                      <SelectItem value="uid">UID</SelectItem>
+                      <SelectItem value="id">ID</SelectItem>
                     </SelectContent>
                   </Select>
                   <Button
@@ -495,7 +478,7 @@ function App() {
                   <thead className="border-b border-gray-200">
                     <tr>
                       <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
-                        UID/RFID
+                        ID
                       </th>
                       <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
                         Name
@@ -533,10 +516,10 @@ function App() {
                         onClick={() => openEdit(row)}
                       >
                         <td className="px-4 py-3">
-                          <div className="font-mono text-sm">{row.uid}</div>
+                          <div className="font-mono text-sm">{row.id}</div>
                         </td>
                         <td className="px-4 py-3 font-medium text-sm whitespace-nowrap">
-                              {row.name}
+                          {row.name}
                         </td>
                         <td className="px-4 py-3 max-w-[200px]">
                           <div className="text-sm truncate">
@@ -544,7 +527,9 @@ function App() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-sm whitespace-nowrap">
-                          {new Date(row.created_at).toLocaleDateString().replace(/\//g, "-")}
+                          {new Date(row.created_at)
+                            .toLocaleDateString()
+                            .replace(/\//g, "-")}
                         </td>
                         <td className="px-4 py-3 text-sm whitespace-nowrap">
                           {row.dateOfBirth || "—"}
@@ -583,7 +568,7 @@ function App() {
                             <Button
                               variant="destructive"
                               size="sm"
-                              onClick={() => handleDelete(row.uid)}
+                              onClick={() => handleDelete(row.id)}
                             >
                               Delete
                             </Button>
@@ -660,7 +645,7 @@ function App() {
                         Rank
                       </th>
                       <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
-                        UID/RFID
+                        ID
                       </th>
                       <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
                         Name
@@ -679,7 +664,7 @@ function App() {
                       )
                       .map((row, idx) => (
                         <tr
-                          key={row.uid}
+                          key={row.customer_id}
                           className={`cursor-pointer hover:bg-gray-50 transition-colors ${
                             idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"
                           }`}
@@ -688,7 +673,9 @@ function App() {
                             <div className="font-mono text-sm">#{row.rank}</div>
                           </td>
                           <td className="px-4 py-3">
-                            <div className="font-mono text-sm">{row.uid}</div>
+                            <div className="font-mono text-sm">
+                              {row.customer_id}
+                            </div>
                           </td>
                           <td className="px-4 py-3 font-medium text-sm">
                             {row.name}
@@ -725,20 +712,6 @@ function App() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">
-                UID (RFID) <span className="text-red-500">*</span>
-              </label>
-              <Input
-                type="text"
-                value={draft.uid}
-                onChange={(e) => setDraft({ ...draft, uid: e.target.value })}
-                placeholder="Scan or enter UID"
-                disabled={!!editing}
-                required
-              />
-            </div>
-
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">
                 Name <span className="text-red-500">*</span>

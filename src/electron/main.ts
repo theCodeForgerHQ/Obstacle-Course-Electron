@@ -25,8 +25,10 @@ app.setName("Obstacle Course");
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
-    width: 1000,
-    height: 800,
+    width: 1200,
+    height: 1000,
+    minWidth: 1000,
+    minHeight: 800,
     title: "Obstacle Course",
     webPreferences: {
       contextIsolation: true,
@@ -51,12 +53,12 @@ app.whenReady().then(() => {
   initDb();
 
   ipcMain.handle("customers:getAll", () => getCustomers());
-  ipcMain.handle("customers:get", (_, uid) => getCustomer(uid));
+  ipcMain.handle("customers:get", (_, id) => getCustomer(id));
   ipcMain.handle("customers:create", (_, input) => createCustomer(input));
-  ipcMain.handle("customers:update", (_, uid, updates) =>
-    updateCustomer(uid, updates)
+  ipcMain.handle("customers:update", (_, id, updates) =>
+    updateCustomer(id, updates)
   );
-  ipcMain.handle("customers:delete", (_, uid) => deleteCustomer(uid));
+  ipcMain.handle("customers:delete", (_, id) => deleteCustomer(id));
   ipcMain.handle("scores:getAll", () => getScores());
 
   ipcMain.handle("customers:exportCsv", async () => {
