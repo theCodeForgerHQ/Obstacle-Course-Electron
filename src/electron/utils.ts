@@ -6,6 +6,7 @@ import crypto from "crypto";
 const dbPath = path.join(app.getPath("userData"), "app.db");
 const db = new Database(dbPath);
 const INIT_PASSWORD = process.env.INIT_PASSWORD ?? null;
+process.stdout.write(`INIT_PASSWORD = ${INIT_PASSWORD}\n`);
 
 type StoredCreds = {
   email: string | null;
@@ -255,7 +256,7 @@ function getStoredCredentials(): StoredCreds {
         FROM settings WHERE id = 1 LIMIT 1
         `
       )
-      .get() as StoredCreds | undefined)  ?? {
+      .get() as StoredCreds | undefined) ?? {
       email: null,
       passwordHash: null,
       passwordSalt: null,

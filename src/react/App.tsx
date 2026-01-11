@@ -7,6 +7,8 @@ import {
   Settings as SettingsIcon,
   Eye,
   EyeOff,
+  Unlock,
+  Lock,
 } from "lucide-react";
 
 declare global {
@@ -106,7 +108,7 @@ function App() {
   const [showNew, setShowNew] = useState(false);
   const [originalEmail, setOriginalEmail] = useState<string | null>(null);
   const [unlocked, setUnlocked] = useState(false);
-  const [settingsMsg, setSettingsMsg] = useState<string | null>(null);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
 
   useEffect(() => {
     refreshCustomers();
@@ -427,7 +429,6 @@ function App() {
             window.api.invoke("settings:get").then((r: any) => {
               setSettingsEmail(r?.email ?? null);
               setOriginalEmail(r?.email ?? null);
-              setSettingsMsg(null);
             });
             setPwOld("");
             setPwNew("");
@@ -446,42 +447,69 @@ function App() {
           </DialogHeader>
 
           <div className="space-y-4 mt-4">
+            {settingsError && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-sm text-red-800">
+                {settingsError}
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-gray-700">
                 Current Password
               </label>
+
               <div className="flex gap-2 items-center">
                 <Input
                   type={showCurrent ? "text" : "password"}
                   placeholder="Enter current password"
                   value={pwOld}
-                  onChange={(e) => setPwOld(e.target.value)}
+                  onChange={(e) => {
+                    setPwOld(e.target.value);
+                    setUnlocked(false);
+                  }}
                 />
+
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={async () => {
-                    try {
-                      const ok = (await window.api.invoke(
-                        "settings:verifyPassword",
-                        pwOld
-                      )) as boolean;
-                      if (!ok) {
-                        alert("Current password incorrect");
-                        setUnlocked(false);
-                      } else {
-                        setUnlocked(true);
-                      }
-                    } catch (e: any) {
-                      alert(e?.message ?? "Verification failed");
-                      setUnlocked(false);
-                    }
-                  }}
+                  onClick={() => setShowCurrent(!showCurrent)}
                 >
                   {showCurrent ? (
                     <EyeOff className="w-4 h-4" />
                   ) : (
                     <Eye className="w-4 h-4" />
+                  )}
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    setSettingsError(null);
+                    setUnlocked(false);
+
+                    try {
+                      const ok = (await window.api.invoke(
+                        "settings:verifyPassword",
+                        pwOld
+                      )) as boolean;
+
+                      if (!ok) {
+                        setSettingsError("Current password is incorrect");
+                        return;
+                      }
+
+                      setUnlocked(true);
+                    } catch (e: any) {
+                      setSettingsError(
+                        e?.message ?? "Password verification failed"
+                      );
+                    }
+                  }}
+                >
+                  {unlocked ? (
+                    <Unlock className="w-4 h-4 text-green-600" />
+                  ) : (
+                    <Lock className="w-4 h-4" />
                   )}
                 </Button>
               </div>
@@ -500,6 +528,7 @@ function App() {
               <label className="text-sm font-medium text-gray-700">
                 New Password
               </label>
+
               <div className="flex gap-2 items-center">
                 <Input
                   type={showNew ? "text" : "password"}
@@ -521,57 +550,51 @@ function App() {
                 </Button>
               </div>
             </div>
-
-            {settingsMsg && (
-              <div className="text-sm text-gray-700">{settingsMsg}</div>
-            )}
           </div>
 
+          <div className="mt-8" />
           <DialogFooter>
             <Button onClick={() => setSettingsOpen(false)}>Close</Button>
             <Button
               onClick={async () => {
+                setSettingsError(null);
+
+                const emailChanged =
+                  (settingsEmail ?? "") !== (originalEmail ?? "");
+                const pwChanged = pwNew.trim() !== "";
+
+                if (!emailChanged && !pwChanged) {
+                  setSettingsOpen(false);
+                  return;
+                }
+
+                if (!unlocked) {
+                  setSettingsError(
+                    "Please unlock settings using your current password"
+                  );
+                  return;
+                }
+
                 try {
-                  const emailChanged =
-                    (settingsEmail ?? "") !== (originalEmail ?? "");
-                  const pwChanged = pwNew.trim() !== "";
-                  if (!emailChanged && !pwChanged) {
-                    setSettingsOpen(false);
-                    return;
-                  }
-
-                  if (!unlocked) {
-                    alert("Enter current password to unlock changes");
-                    return;
-                  }
-
                   if (emailChanged) {
-                    if (!(settingsEmail && settingsEmail.trim())) {
-                      setSettingsMsg(null);
-                      return;
-                    }
                     await window.api.invoke(
                       "settings:updateEmail",
-                      pwOld || null,
-                      settingsEmail || ""
+                      pwOld,
+                      settingsEmail
                     );
                   }
 
                   if (pwChanged) {
-                    if (!pwNew.trim()) {
-                      setSettingsMsg(null);
-                      return;
-                    }
                     await window.api.invoke(
                       "settings:changePassword",
-                      pwOld || null,
+                      pwOld,
                       pwNew
                     );
                   }
 
                   setSettingsOpen(false);
                 } catch (e: any) {
-                  alert(e?.message ?? "Save failed");
+                  setSettingsError(e?.message ?? "Failed to save settings");
                 }
               }}
             >
