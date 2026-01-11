@@ -11,7 +11,11 @@ import {
   updateCustomer,
   deleteCustomer,
   getScores,
+  getSettings,
+  updateEmail,
+  changePassword,
   exportCustomersCsv,
+  verifyPassword,
   importCustomersCsv,
   exportScoresCsv,
   importScoresCsv,
@@ -60,6 +64,23 @@ app.whenReady().then(() => {
   );
   ipcMain.handle("customers:delete", (_, id) => deleteCustomer(id));
   ipcMain.handle("scores:getAll", () => getScores());
+
+  ipcMain.handle("settings:get", () => getSettings());
+  ipcMain.handle("settings:verifyPassword", async (_, password: string) => {
+    return verifyPassword(password);
+  });
+  ipcMain.handle(
+    "settings:updateEmail",
+    async (_, oldPassword: string | null, email: string) => {
+      return updateEmail(oldPassword, email);
+    }
+  );
+  ipcMain.handle(
+    "settings:changePassword",
+    async (_, oldPassword: string | null, newPassword: string) => {
+      return changePassword(oldPassword, newPassword);
+    }
+  );
 
   ipcMain.handle("customers:exportCsv", async () => {
     const { canceled, filePath } = await dialog.showSaveDialog({

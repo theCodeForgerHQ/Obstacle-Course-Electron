@@ -1,7 +1,13 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "./components/ui/button";
-import { Upload, Download } from "lucide-react";
+import {
+  Upload,
+  Download,
+  Settings as SettingsIcon,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 
 declare global {
   interface Window {
@@ -91,6 +97,16 @@ function App() {
   const [draft, setDraft] = useState<CustomerDraft>(emptyDraft);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsEmail, setSettingsEmail] = useState<string | null>(null);
+
+  const [pwOld, setPwOld] = useState("");
+  const [pwNew, setPwNew] = useState("");
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [originalEmail, setOriginalEmail] = useState<string | null>(null);
+  const [unlocked, setUnlocked] = useState(false);
+  const [settingsMsg, setSettingsMsg] = useState<string | null>(null);
 
   useEffect(() => {
     refreshCustomers();
@@ -361,6 +377,14 @@ function App() {
                 <Upload className="w-4 h-4 mr-1" />
                 Import
               </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSettingsOpen(true)}
+              >
+                <SettingsIcon className="w-4 h-4 mr-1" />
+                Settings
+              </Button>
             </>
           )}
 
@@ -382,10 +406,180 @@ function App() {
                 <Upload className="w-4 h-4 mr-1" />
                 Import
               </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSettingsOpen(true)}
+              >
+                <SettingsIcon className="w-4 h-4 mr-1" />
+                Settings
+              </Button>
             </>
           )}
         </div>
       </div>
+
+      <Dialog
+        open={settingsOpen}
+        onOpenChange={(open) => {
+          setSettingsOpen(open);
+          if (open) {
+            window.api.invoke("settings:get").then((r: any) => {
+              setSettingsEmail(r?.email ?? null);
+              setOriginalEmail(r?.email ?? null);
+              setSettingsMsg(null);
+            });
+            setPwOld("");
+            setPwNew("");
+            setUnlocked(false);
+            setShowCurrent(false);
+            setShowNew(false);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Settings</DialogTitle>
+            <DialogDescription>
+              Manage account email and password.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-gray-700">
+                Current Password
+              </label>
+              <div className="flex gap-2 items-center">
+                <Input
+                  type={showCurrent ? "text" : "password"}
+                  placeholder="Enter current password"
+                  value={pwOld}
+                  onChange={(e) => setPwOld(e.target.value)}
+                />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    try {
+                      const ok = (await window.api.invoke(
+                        "settings:verifyPassword",
+                        pwOld
+                      )) as boolean;
+                      if (!ok) {
+                        alert("Current password incorrect");
+                        setUnlocked(false);
+                      } else {
+                        setUnlocked(true);
+                      }
+                    } catch (e: any) {
+                      alert(e?.message ?? "Verification failed");
+                      setUnlocked(false);
+                    }
+                  }}
+                >
+                  {showCurrent ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-gray-700">Email</label>
+              <Input
+                value={settingsEmail ?? ""}
+                onChange={(e) => setSettingsEmail(e.target.value)}
+                disabled={!unlocked}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-gray-700">
+                New Password
+              </label>
+              <div className="flex gap-2 items-center">
+                <Input
+                  type={showNew ? "text" : "password"}
+                  placeholder="New password"
+                  value={pwNew}
+                  onChange={(e) => setPwNew(e.target.value)}
+                  disabled={!unlocked}
+                />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowNew(!showNew)}
+                >
+                  {showNew ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {settingsMsg && (
+              <div className="text-sm text-gray-700">{settingsMsg}</div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button onClick={() => setSettingsOpen(false)}>Close</Button>
+            <Button
+              onClick={async () => {
+                try {
+                  const emailChanged =
+                    (settingsEmail ?? "") !== (originalEmail ?? "");
+                  const pwChanged = pwNew.trim() !== "";
+                  if (!emailChanged && !pwChanged) {
+                    setSettingsOpen(false);
+                    return;
+                  }
+
+                  if (!unlocked) {
+                    alert("Enter current password to unlock changes");
+                    return;
+                  }
+
+                  if (emailChanged) {
+                    if (!(settingsEmail && settingsEmail.trim())) {
+                      setSettingsMsg(null);
+                      return;
+                    }
+                    await window.api.invoke(
+                      "settings:updateEmail",
+                      pwOld || null,
+                      settingsEmail || ""
+                    );
+                  }
+
+                  if (pwChanged) {
+                    if (!pwNew.trim()) {
+                      setSettingsMsg(null);
+                      return;
+                    }
+                    await window.api.invoke(
+                      "settings:changePassword",
+                      pwOld || null,
+                      pwNew
+                    );
+                  }
+
+                  setSettingsOpen(false);
+                } catch (e: any) {
+                  alert(e?.message ?? "Save failed");
+                }
+              }}
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {tab === "customers" && (
         <>

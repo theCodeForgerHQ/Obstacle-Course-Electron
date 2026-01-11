@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import path from "path";
 import { app } from "electron";
+import crypto from "crypto";
 
 const dbPath = path.join(app.getPath("userData"), "app.db");
 const db = new Database(dbPath);
@@ -33,6 +34,7 @@ export interface CustomerUpdate {
 export function initDb() {
   db.prepare("DROP TABLE IF EXISTS scores").run();
   db.prepare("DROP TABLE IF EXISTS customers").run();
+  db.prepare("DROP TABLE IF EXISTS settings").run();
 
   const createCustomersTable = `
     CREATE TABLE IF NOT EXISTS customers (
@@ -63,6 +65,25 @@ export function initDb() {
     "CREATE INDEX IF NOT EXISTS idx_scores_customer_id_date ON scores (customer_id, date)"
   ).run();
 
+  const createSettings = `
+    CREATE TABLE IF NOT EXISTS settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      email TEXT,
+      password_hash TEXT,
+      password_salt TEXT
+    );
+  `;
+
+  db.prepare(createSettings).run();
+  const existsSettings = db
+    .prepare("SELECT 1 FROM settings WHERE id = 1 LIMIT 1")
+    .get();
+  if (!existsSettings) {
+    const { salt, hash } = scryptHash("123456");
+    db.prepare(
+      "INSERT INTO settings (id, email, password_hash, password_salt) VALUES (1, @email, @hash, @salt)"
+    ).run({ email: "ajayaditya.dev@gmail.com", hash, salt });
+  }
   seedCustomers();
 }
 
@@ -190,6 +211,97 @@ export function getScores() {
 
 export function isDev(): boolean {
   return process.env.NODE_ENV === "development";
+}
+
+function scryptHash(password: string, salt?: string) {
+  const s = salt ?? crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(password, s, 64).toString("hex");
+  return { salt: s, hash };
+}
+
+type StoredCreds = {
+  email: string | null;
+  passwordHash: string | null;
+  passwordSalt: string | null;
+};
+
+function getStoredCredentials(): StoredCreds {
+  const row: StoredCreds | undefined = db
+    .prepare(
+      "SELECT email, password_hash AS passwordHash, password_salt AS passwordSalt FROM settings WHERE id = 1 LIMIT 1"
+    )
+    .get() as StoredCreds | undefined;
+  return row || { email: null, passwordHash: null, passwordSalt: null };
+}
+
+export function getSettings() {
+  const r = getStoredCredentials();
+  return { email: r.email ?? null };
+}
+
+export function verifyPassword(password: string) {
+  const r = getStoredCredentials();
+  if (!r.passwordHash || !r.passwordSalt) return true;
+  try {
+    const { hash } = scryptHash(password, r.passwordSalt);
+    const a = Buffer.from(hash, "hex");
+    const b = Buffer.from(r.passwordHash, "hex");
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+  } catch (e) {
+    return false;
+  }
+}
+
+export function changePassword(
+  oldPassword: string | null,
+  newPassword: string
+) {
+  const r = getStoredCredentials();
+  if (r.passwordHash && r.passwordSalt) {
+    if (!verifyPassword(oldPassword ?? "")) {
+      throw new Error("Old password incorrect");
+    }
+  }
+
+  const { salt, hash } = scryptHash(newPassword);
+  const exists = db
+    .prepare("SELECT 1 FROM settings WHERE id = 1 LIMIT 1")
+    .get();
+  if (exists) {
+    db.prepare(
+      "UPDATE settings SET password_hash = @hash, password_salt = @salt WHERE id = 1"
+    ).run({ hash, salt });
+  } else {
+    db.prepare(
+      "INSERT INTO settings (id, email, password_hash, password_salt) VALUES (1, NULL, @hash, @salt)"
+    ).run({ hash, salt });
+  }
+  return true;
+}
+
+export function updateEmail(oldPassword: string | null, email: string) {
+  const r = getStoredCredentials();
+  if (r.passwordHash && r.passwordSalt) {
+    if (!verifyPassword(oldPassword ?? "")) {
+      throw new Error("Old password incorrect");
+    }
+  }
+
+  const exists = db
+    .prepare("SELECT 1 FROM settings WHERE id = 1 LIMIT 1")
+    .get();
+  if (exists) {
+    const stmt = db.prepare("UPDATE settings SET email = @email WHERE id = 1");
+    const res = stmt.run({ email });
+    return res.changes;
+  } else {
+    const stmt = db.prepare(
+      "INSERT INTO settings (id, email) VALUES (1, @email)"
+    );
+    const res = stmt.run({ email });
+    return res.changes;
+  }
 }
 
 function escapeCsv(value: any): string {
