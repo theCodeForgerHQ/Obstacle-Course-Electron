@@ -6,7 +6,6 @@ import crypto from "crypto";
 const dbPath = path.join(app.getPath("userData"), "app.db");
 const db = new Database(dbPath);
 const INIT_PASSWORD = process.env.INIT_PASSWORD ?? null;
-process.stdout.write(`INIT_PASSWORD = ${INIT_PASSWORD}\n`);
 
 type StoredCreds = {
   email: string | null;
@@ -53,9 +52,11 @@ export interface CustomerUpdate {
 }
 
 export function initDb() {
-  db.prepare("DROP TABLE IF EXISTS scores").run();
-  db.prepare("DROP TABLE IF EXISTS customers").run();
-  db.prepare("DROP TABLE IF EXISTS settings").run();
+  if (process.env.NODE_ENV === "development" && process.env.RESET_DB === "1") {
+    db.prepare("DROP TABLE IF EXISTS scores").run();
+    db.prepare("DROP TABLE IF EXISTS customers").run();
+    db.prepare("DROP TABLE IF EXISTS settings").run();
+  }
 
   const createCustomersTable = `
     CREATE TABLE IF NOT EXISTS customers (
@@ -107,7 +108,10 @@ export function initDb() {
       "INSERT INTO settings (id, password_hash, password_salt) VALUES (1, @hash, @salt)"
     ).run({ hash, salt });
   }
-  seedCustomers();
+
+  if (process.env.NODE_ENV === "development" && process.env.SEED_DB === "1") {
+    seedCustomers();
+  }
 }
 
 export function createCustomer(input: CustomerInput) {

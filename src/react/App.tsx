@@ -554,7 +554,16 @@ function App() {
 
           <div className="mt-8" />
           <DialogFooter>
-            <Button onClick={() => setSettingsOpen(false)}>Close</Button>
+            <Button
+              onClick={() => {
+                setSettingsOpen(false);
+                setPwOld("");
+                setPwNew("");
+                setUnlocked(false);
+              }}
+            >
+              Close
+            </Button>
             <Button
               onClick={async () => {
                 setSettingsError(null);
@@ -593,6 +602,10 @@ function App() {
                   }
 
                   setSettingsOpen(false);
+                  setSettingsError(null);
+                  setPwOld("");
+                  setPwNew("");
+                  setUnlocked(false);
                 } catch (e: any) {
                   setSettingsError(e?.message ?? "Failed to save settings");
                 }
