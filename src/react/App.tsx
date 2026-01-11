@@ -115,6 +115,30 @@ function App() {
     refreshScores();
   }, []);
 
+  async function fetchSettings() {
+    try {
+      const r = (await window.api.invoke("settings:get")) as any;
+      setSettingsEmail(r?.email ?? null);
+      setOriginalEmail(r?.email ?? null);
+    } catch (e) {
+      console.error("Error loading settings:", e);
+      setSettingsEmail(null);
+      setOriginalEmail(null);
+    }
+  }
+
+  useEffect(() => {
+    if (settingsOpen) {
+      fetchSettings();
+      setPwOld("");
+      setPwNew("");
+      setUnlocked(false);
+      setShowCurrent(false);
+      setShowNew(false);
+      setSettingsError(null);
+    }
+  }, [settingsOpen]);
+
   async function refreshCustomers() {
     setLoadingCustomers(true);
     setCustomerError(null);
@@ -423,20 +447,7 @@ function App() {
 
       <Dialog
         open={settingsOpen}
-        onOpenChange={(open) => {
-          setSettingsOpen(open);
-          if (open) {
-            window.api.invoke("settings:get").then((r: any) => {
-              setSettingsEmail(r?.email ?? null);
-              setOriginalEmail(r?.email ?? null);
-            });
-            setPwOld("");
-            setPwNew("");
-            setUnlocked(false);
-            setShowCurrent(false);
-            setShowNew(false);
-          }
-        }}
+        onOpenChange={(open) => setSettingsOpen(open)}
       >
         <DialogContent>
           <DialogHeader>
