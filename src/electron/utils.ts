@@ -9,20 +9,20 @@ const BCRYPT_ROUNDS = 12;
 
 db.pragma("foreign_keys = ON");
 
-export interface Session {
+interface Session {
   userId: number;
   username: string;
   role: "OWNER" | "MANAGER" | "OPERATOR";
 }
 
-export interface UserInput {
+interface UserInput {
   username: string;
   email: string;
   phone: string;
   password: string;
 }
 
-export interface User {
+interface User {
   id: number;
   username: string;
   email: string;
@@ -30,7 +30,7 @@ export interface User {
   role: "OWNER" | "MANAGER" | "OPERATOR";
 }
 
-export interface Customer {
+interface Customer {
   id?: number;
   name?: string;
   address?: string;
@@ -130,7 +130,14 @@ export function eraseSession() {
 }
 
 export function readSession(): Session | null {
-  const stmt = db.prepare(`SELECT * FROM sessions LIMIT 1`);
+  const stmt = db.prepare(`
+      SELECT
+        user_id AS userId,
+        username,
+        role
+      FROM sessions
+      LIMIT 1
+    `);
   return stmt.get() as Session | null;
 }
 

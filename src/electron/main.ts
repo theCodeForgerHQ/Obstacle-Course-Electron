@@ -1,19 +1,46 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, IpcMainInvokeEvent } from "electron";
 import path from "path";
 import {
-  isDev,
   initDb,
-  getCustomers,
+  eraseSession,
+  readSession,
+  createUser,
+  getCurrentUserInfo,
+  getAllUsers,
+  deleteUser,
+  promoteUserToManager,
+  demoteUserToOperator,
+  verifyPassword,
+  updatePassword,
+  updatePhoneNumber,
+  loginUser,
   createCustomer,
+  getCustomers,
   updateCustomer,
   deleteCustomer,
   getScores,
+  isDev,
 } from "./utils.js";
+
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+export function safeHandler<Args extends any[] = any[], Return = any>(
+  fn: (...args: Args) => Return | Promise<Return>
+) {
+  return async (
+    _event: IpcMainInvokeEvent,
+    ...args: Args
+  ): Promise<Return | { error: string }> => {
+    try {
+      return await fn(...args);
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  };
+}
 app.setName("Obstacle Course");
 
 function createWindow() {
@@ -26,7 +53,7 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      devTools: true,
+      devTools: isDev(),
       preload: path.join(__dirname, "preload.js"),
     },
   });
@@ -45,13 +72,27 @@ function createWindow() {
 app.whenReady().then(() => {
   initDb();
 
-  ipcMain.handle("customers:getAll", () => getCustomers());
-  ipcMain.handle("customers:create", (_, input) => createCustomer(input));
-  ipcMain.handle("customers:update", (_, id, updates, modifiedBy) =>
-    updateCustomer(id, updates, modifiedBy)
-  );
-  ipcMain.handle("customers:delete", (_, id) => deleteCustomer(id));
-  ipcMain.handle("scores:getAll", () => getScores());
+  ipcMain.handle("session:erase", safeHandler(eraseSession));
+  ipcMain.handle("session:read", safeHandler(readSession));
+
+  ipcMain.handle("user:create", safeHandler(createUser));
+  ipcMain.handle("user:current", safeHandler(getCurrentUserInfo));
+  ipcMain.handle("user:list", safeHandler(getAllUsers));
+  ipcMain.handle("user:delete", safeHandler(deleteUser));
+  ipcMain.handle("user:promoteToManager", safeHandler(promoteUserToManager));
+  ipcMain.handle("user:demoteToOperator", safeHandler(demoteUserToOperator));
+
+  ipcMain.handle("auth:login", safeHandler(loginUser));
+  ipcMain.handle("auth:verifyPassword", safeHandler(verifyPassword));
+  ipcMain.handle("auth:updatePassword", safeHandler(updatePassword));
+  ipcMain.handle("auth:updatePhone", safeHandler(updatePhoneNumber));
+
+  ipcMain.handle("customer:create", safeHandler(createCustomer));
+  ipcMain.handle("customer:list", safeHandler(getCustomers));
+  ipcMain.handle("customer:update", safeHandler(updateCustomer));
+  ipcMain.handle("customer:delete", safeHandler(deleteCustomer));
+
+  ipcMain.handle("scores:list", safeHandler(getScores));
 
   createWindow();
 
@@ -61,5 +102,6 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
+  eraseSession();
   if (process.platform !== "darwin") app.quit();
 });
