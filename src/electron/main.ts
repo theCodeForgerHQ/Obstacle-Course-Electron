@@ -1,5 +1,3 @@
-import { dialog } from "electron";
-import fs from "fs";
 import { app, BrowserWindow, ipcMain } from "electron";
 import path from "path";
 import {
@@ -49,8 +47,8 @@ app.whenReady().then(() => {
 
   ipcMain.handle("customers:getAll", () => getCustomers());
   ipcMain.handle("customers:create", (_, input) => createCustomer(input));
-  ipcMain.handle("customers:update", (_, id, updates) =>
-    updateCustomer(id, updates)
+  ipcMain.handle("customers:update", (_, id, updates, modifiedBy) =>
+    updateCustomer(id, updates, modifiedBy)
   );
   ipcMain.handle("customers:delete", (_, id) => deleteCustomer(id));
   ipcMain.handle("scores:getAll", () => getScores());
