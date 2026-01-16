@@ -11,14 +11,6 @@ import {
   updateCustomer,
   deleteCustomer,
   getScores,
-  getSettings,
-  updateEmail,
-  changePassword,
-  exportCustomersCsv,
-  verifyPassword,
-  importCustomersCsv,
-  exportScoresCsv,
-  importScoresCsv,
 } from "./utils.js";
 import { fileURLToPath } from "url";
 
@@ -64,75 +56,6 @@ app.whenReady().then(() => {
   );
   ipcMain.handle("customers:delete", (_, id) => deleteCustomer(id));
   ipcMain.handle("scores:getAll", () => getScores());
-
-  ipcMain.handle("settings:get", () => getSettings());
-  ipcMain.handle("settings:verifyPassword", async (_, password: string) => {
-    return verifyPassword(password);
-  });
-  ipcMain.handle(
-    "settings:updateEmail",
-    async (_, oldPassword: string | null, email: string) => {
-      return updateEmail(oldPassword, email);
-    }
-  );
-  ipcMain.handle(
-    "settings:changePassword",
-    async (_, oldPassword: string | null, newPassword: string) => {
-      return changePassword(oldPassword, newPassword);
-    }
-  );
-
-  ipcMain.handle("customers:exportCsv", async () => {
-    const { canceled, filePath } = await dialog.showSaveDialog({
-      title: "Export Participants",
-      defaultPath: "participants.csv",
-      filters: [{ name: "CSV", extensions: ["csv"] }],
-    });
-
-    if (canceled || !filePath) return;
-
-    const csv = exportCustomersCsv();
-    fs.writeFileSync(filePath, csv, "utf8");
-  });
-
-  ipcMain.handle("scores:exportCsv", async () => {
-    const { canceled, filePath } = await dialog.showSaveDialog({
-      title: "Export Scores",
-      defaultPath: "scores.csv",
-      filters: [{ name: "CSV", extensions: ["csv"] }],
-    });
-
-    if (canceled || !filePath) return;
-
-    const csv = exportScoresCsv();
-    fs.writeFileSync(filePath, csv, "utf8");
-  });
-
-  ipcMain.handle("customers:importCsv", async () => {
-    const { canceled, filePaths } = await dialog.showOpenDialog({
-      title: "Import Participants",
-      filters: [{ name: "CSV", extensions: ["csv"] }],
-      properties: ["openFile"],
-    });
-
-    if (canceled || filePaths.length === 0) return;
-
-    const csv = fs.readFileSync(filePaths[0], "utf8");
-    importCustomersCsv(csv);
-  });
-
-  ipcMain.handle("scores:importCsv", async () => {
-    const { canceled, filePaths } = await dialog.showOpenDialog({
-      title: "Import Scores",
-      filters: [{ name: "CSV", extensions: ["csv"] }],
-      properties: ["openFile"],
-    });
-
-    if (canceled || filePaths.length === 0) return;
-
-    const csv = fs.readFileSync(filePaths[0], "utf8");
-    importScoresCsv(csv);
-  });
 
   createWindow();
 

@@ -1,15 +1,6 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "./components/ui/button";
-import {
-  Upload,
-  Download,
-  Settings as SettingsIcon,
-  Eye,
-  EyeOff,
-  Unlock,
-  Lock,
-} from "lucide-react";
 
 declare global {
   interface Window {
@@ -99,45 +90,11 @@ function App() {
   const [draft, setDraft] = useState<CustomerDraft>(emptyDraft);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsEmail, setSettingsEmail] = useState<string | null>(null);
-
-  const [pwOld, setPwOld] = useState("");
-  const [pwNew, setPwNew] = useState("");
-  const [showCurrent, setShowCurrent] = useState(false);
-  const [showNew, setShowNew] = useState(false);
-  const [originalEmail, setOriginalEmail] = useState<string | null>(null);
-  const [unlocked, setUnlocked] = useState(false);
-  const [settingsError, setSettingsError] = useState<string | null>(null);
 
   useEffect(() => {
     refreshCustomers();
     refreshScores();
   }, []);
-
-  async function fetchSettings() {
-    try {
-      const r = (await window.api.invoke("settings:get")) as any;
-      setSettingsEmail(r?.email ?? null);
-      setOriginalEmail(r?.email ?? null);
-    } catch (e) {
-      console.error("Error loading settings:", e);
-      setSettingsEmail(null);
-      setOriginalEmail(null);
-    }
-  }
-
-  useEffect(() => {
-    if (settingsOpen) {
-      fetchSettings();
-      setPwOld("");
-      setPwNew("");
-      setUnlocked(false);
-      setShowCurrent(false);
-      setShowNew(false);
-      setSettingsError(null);
-    }
-  }, [settingsOpen]);
 
   async function refreshCustomers() {
     setLoadingCustomers(true);
@@ -345,16 +302,6 @@ function App() {
     }
   }
 
-  async function importCsv(kind: "customers" | "scores") {
-    await window.api.invoke(`${kind}:importCsv`);
-    if (kind === "customers") await refreshCustomers();
-    if (kind === "scores") await refreshScores();
-  }
-
-  async function exportCsv(kind: "customers" | "scores") {
-    await window.api.invoke(`${kind}:exportCsv`);
-  }
-
   const badge = (value?: string | null) =>
     value ? (
       <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
@@ -383,250 +330,7 @@ function App() {
             Leaderboard
           </Button>
         </div>
-
-        <div className="ml-auto flex gap-2">
-          {tab === "customers" && (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => exportCsv("customers")}
-              >
-                <Download className="w-4 h-4 mr-1" />
-                Export
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => importCsv("customers")}
-              >
-                <Upload className="w-4 h-4 mr-1" />
-                Import
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSettingsOpen(true)}
-              >
-                <SettingsIcon className="w-4 h-4 mr-1" />
-                Settings
-              </Button>
-            </>
-          )}
-
-          {tab === "leaderboard" && (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => exportCsv("scores")}
-              >
-                <Download className="w-4 h-4 mr-1" />
-                Export
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => importCsv("scores")}
-              >
-                <Upload className="w-4 h-4 mr-1" />
-                Import
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSettingsOpen(true)}
-              >
-                <SettingsIcon className="w-4 h-4 mr-1" />
-                Settings
-              </Button>
-            </>
-          )}
-        </div>
       </div>
-
-      <Dialog
-        open={settingsOpen}
-        onOpenChange={(open) => setSettingsOpen(open)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Settings</DialogTitle>
-            <DialogDescription>
-              Manage account email and password.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 mt-4">
-            {settingsError && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-sm text-red-800">
-                {settingsError}
-              </div>
-            )}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">
-                Current Password
-              </label>
-
-              <div className="flex gap-2 items-center">
-                <Input
-                  type={showCurrent ? "text" : "password"}
-                  placeholder="Enter current password"
-                  value={pwOld}
-                  onChange={(e) => {
-                    setPwOld(e.target.value);
-                    setUnlocked(false);
-                  }}
-                />
-
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setShowCurrent(!showCurrent)}
-                >
-                  {showCurrent ? (
-                    <EyeOff className="w-4 h-4" />
-                  ) : (
-                    <Eye className="w-4 h-4" />
-                  )}
-                </Button>
-
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={async () => {
-                    setSettingsError(null);
-                    setUnlocked(false);
-
-                    try {
-                      const ok = (await window.api.invoke(
-                        "settings:verifyPassword",
-                        pwOld
-                      )) as boolean;
-
-                      if (!ok) {
-                        setSettingsError("Current password is incorrect");
-                        return;
-                      }
-
-                      setUnlocked(true);
-                    } catch (e: any) {
-                      setSettingsError(
-                        e?.message ?? "Password verification failed"
-                      );
-                    }
-                  }}
-                >
-                  {unlocked ? (
-                    <Unlock className="w-4 h-4 text-green-600" />
-                  ) : (
-                    <Lock className="w-4 h-4" />
-                  )}
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">Email</label>
-              <Input
-                value={settingsEmail ?? ""}
-                onChange={(e) => setSettingsEmail(e.target.value)}
-                disabled={!unlocked}
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">
-                New Password
-              </label>
-
-              <div className="flex gap-2 items-center">
-                <Input
-                  type={showNew ? "text" : "password"}
-                  placeholder="New password"
-                  value={pwNew}
-                  onChange={(e) => setPwNew(e.target.value)}
-                  disabled={!unlocked}
-                />
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setShowNew(!showNew)}
-                >
-                  {showNew ? (
-                    <EyeOff className="w-4 h-4" />
-                  ) : (
-                    <Eye className="w-4 h-4" />
-                  )}
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-8" />
-          <DialogFooter>
-            <Button
-              onClick={() => {
-                setSettingsOpen(false);
-                setPwOld("");
-                setPwNew("");
-                setUnlocked(false);
-              }}
-            >
-              Close
-            </Button>
-            <Button
-              onClick={async () => {
-                setSettingsError(null);
-
-                const emailChanged =
-                  (settingsEmail ?? "") !== (originalEmail ?? "");
-                const pwChanged = pwNew.trim() !== "";
-
-                if (!emailChanged && !pwChanged) {
-                  setSettingsOpen(false);
-                  return;
-                }
-
-                if (!unlocked) {
-                  setSettingsError(
-                    "Please unlock settings using your current password"
-                  );
-                  return;
-                }
-
-                try {
-                  if (emailChanged) {
-                    await window.api.invoke(
-                      "settings:updateEmail",
-                      pwOld,
-                      settingsEmail
-                    );
-                  }
-
-                  if (pwChanged) {
-                    await window.api.invoke(
-                      "settings:changePassword",
-                      pwOld,
-                      pwNew
-                    );
-                  }
-
-                  setSettingsOpen(false);
-                  setSettingsError(null);
-                  setPwOld("");
-                  setPwNew("");
-                  setUnlocked(false);
-                } catch (e: any) {
-                  setSettingsError(e?.message ?? "Failed to save settings");
-                }
-              }}
-            >
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {tab === "customers" && (
         <>
