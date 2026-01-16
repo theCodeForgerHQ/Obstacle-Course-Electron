@@ -6,7 +6,6 @@ import {
   isDev,
   initDb,
   getCustomers,
-  getCustomer,
   createCustomer,
   updateCustomer,
   deleteCustomer,
@@ -49,7 +48,6 @@ app.whenReady().then(() => {
   initDb();
 
   ipcMain.handle("customers:getAll", () => getCustomers());
-  ipcMain.handle("customers:get", (_, id) => getCustomer(id));
   ipcMain.handle("customers:create", (_, input) => createCustomer(input));
   ipcMain.handle("customers:update", (_, id, updates) =>
     updateCustomer(id, updates)
