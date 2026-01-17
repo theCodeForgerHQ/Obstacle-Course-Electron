@@ -25,4 +25,4 @@ dist-ssr
 *.sln
 *.sw?
 
-./src/react/App1.tsx
+src/react/App1.tsx

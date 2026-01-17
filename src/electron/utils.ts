@@ -43,6 +43,7 @@ interface Customer {
 export function initDb() {
   if (process.env.NODE_ENV === "development" && process.env.RESET_DB === "1") {
     db.prepare("DROP TABLE IF EXISTS scores").run();
+    db.prepare("DROP TABLE IF EXISTS scores").run();
     db.prepare("DROP TABLE IF EXISTS customers").run();
     db.prepare("DROP TABLE IF EXISTS users").run();
   }

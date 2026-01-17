@@ -12,6 +12,21 @@ import { useEffect, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
+import { LayoutGrid, UserPlus, Trophy, Settings } from "lucide-react";
+import { cn } from "./lib/utils";
+
+type Page = "dashboard" | "customers" | "leaderboard" | "settings";
+
+const navItems: {
+  key: Page;
+  label: string;
+  icon: React.ElementType;
+}[] = [
+  { key: "dashboard", label: "Dashboard", icon: LayoutGrid },
+  { key: "customers", label: "Customers", icon: UserPlus },
+  { key: "leaderboard", label: "Leaderboard", icon: Trophy },
+  { key: "settings", label: "Settings", icon: Settings },
+];
 
 type Session = {
   userId: number;
@@ -25,7 +40,8 @@ export default function App() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [activePage, setActivePage] = useState<Page>("dashboard");
 
   useEffect(() => {
     window.electron.ipcRenderer.invoke("session:read").then((res: any) => {
@@ -35,14 +51,14 @@ export default function App() {
   }, []);
 
   const onLogin = async () => {
-    setError(null);
+    setLoginError(null);
     const res = await window.electron.ipcRenderer.invoke(
       "auth:login",
       identifier,
       password
     );
     if (res?.error) {
-      setError(res.error);
+      setLoginError(res.error);
     } else {
       setSession(res);
     }
@@ -52,9 +68,60 @@ export default function App() {
 
   if (session) {
     return (
-      <div className="min-h-screen bg-[#E8F5EF] flex items-center justify-center">
-        <div className="text-gray-700 text-sm">
-          Logged in as <span className="font-medium">{session.username}</span>
+      <div className="min-h-screen bg-[#FAFAFA] pb-24">
+        {/* Main content */}
+        <div className="p-8">
+          {activePage === "dashboard" && (
+            <h1 className="text-xl font-semibold">Dashboard</h1>
+          )}
+          {activePage === "customers" && (
+            <h1 className="text-xl font-semibold">Customer Registration</h1>
+          )}
+          {activePage === "leaderboard" && (
+            <h1 className="text-xl font-semibold">Leaderboard</h1>
+          )}
+          {activePage === "settings" && (
+            <h1 className="text-xl font-semibold">Settings</h1>
+          )}
+        </div>
+
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2">
+          <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white shadow-sm px-2 py-2">
+            {navItems.map(({ key, label, icon: Icon }) => {
+              const active = activePage === key;
+
+              return (
+                <button
+                  key={key}
+                  onClick={() => setActivePage(key)}
+                  className={cn(
+                    "relative flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-300",
+                    active
+                      ? "bg-[#E8F5EF] text-gray-900"
+                      : "text-gray-500 hover:text-gray-900"
+                  )}
+                >
+                  <Icon
+                    size={18}
+                    className={cn(
+                      "transition-all duration-300",
+                      active ? "text-gray-900" : "text-gray-400"
+                    )}
+                  />
+
+                  {/* Label smoothly expands */}
+                  <span
+                    className={cn(
+                      "overflow-hidden whitespace-nowrap transition-all duration-300",
+                      active ? "max-w-[120px] opacity-100" : "max-w-0 opacity-0"
+                    )}
+                  >
+                    {label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     );
@@ -106,9 +173,9 @@ export default function App() {
             </div>
           </div>
 
-          {error && (
+          {loginError && (
             <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
-              {error}
+              {loginError}
             </div>
           )}
 
