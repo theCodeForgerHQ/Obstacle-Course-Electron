@@ -24,3 +24,5 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+./src/react/App1.tsx

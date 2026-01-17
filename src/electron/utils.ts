@@ -9,7 +9,7 @@ const BCRYPT_ROUNDS = 12;
 
 db.pragma("foreign_keys = ON");
 
-interface Session {
+export interface Session {
   userId: number;
   username: string;
   role: "OWNER" | "MANAGER" | "OPERATOR";
