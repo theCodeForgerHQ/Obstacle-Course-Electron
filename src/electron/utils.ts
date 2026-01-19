@@ -472,6 +472,137 @@ export function deleteUser(userId: number): void {
   }
 }
 
+export function createCustomer(input: Customer) {
+  const session = readSession();
+  if (!session) {
+    throw new Error("No active session.");
+  }
+
+  if (
+    !input.name ||
+    !input.email ||
+    !input.phone ||
+    !input.emergency_contact ||
+    !input.address ||
+    !input.date_of_birth ||
+    !input.gender ||
+    !input.blood_group
+  ) {
+    throw new Error("Missing required customer fields.");
+  }
+
+  const phone = input.phone.replace(/\D/g, "");
+  const emergency = input.emergency_contact.replace(/\D/g, "");
+
+  if (!/^\d{10}$/.test(phone)) {
+    throw new Error("Phone number must be 10 digits.");
+  }
+
+  if (!/^\d{10}$/.test(emergency)) {
+    throw new Error("Emergency Contact number must be 10 digits.");
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) {
+    throw new Error("Invalid email address.");
+  }
+
+  const stmt = db.prepare(
+    `INSERT INTO customers (name, email, phone, gender, emergency_contact, address, date_of_birth, blood_group) 
+         VALUES (@name, @email, @phone, @gender, @emergency_contact, @address, @date_of_birth, @blood_group)`,
+  );
+
+  const result = stmt.run({
+    name: input.name,
+    email: input.email,
+    phone: input.phone,
+    gender: input.gender,
+    emergency_contact: input.emergency_contact,
+    address: input.address,
+    date_of_birth: input.date_of_birth,
+    blood_group: input.blood_group,
+  });
+  return result.lastInsertRowid;
+}
+
+export function getCustomers(): Customer[] {
+  const session = readSession();
+  if (!session || (session.role !== "MANAGER" && session.role !== "OWNER")) {
+    throw new Error("Permission denied.");
+  }
+
+  const stmt = db.prepare(
+    `SELECT id, name, email, phone, emergency_contact, address, date_of_birth, gender, blood_group, created_at FROM customers WHERE is_deleted = 0 ORDER BY id ASC`,
+  );
+
+  return stmt.all() as Customer[];
+}
+
+export function updateCustomerProfile(
+  customerId: number,
+  updates: Partial<EditableProfileFields>,
+): number {
+  if (!customerId) {
+    throw new Error("Customer ID is required.");
+  }
+
+  const normalized = normalizeUpdates(updates);
+  const setClause = buildSetClause(normalized);
+  if (!setClause) return 0;
+
+  const result = db
+    .prepare(
+      `UPDATE customers SET ${setClause} WHERE id = @id AND is_deleted = 0`,
+    )
+    .run({ id: customerId, ...normalized });
+
+  return result.changes;
+}
+
+export function deleteCustomer(id: number) {
+  const session = readSession();
+  if (!session) {
+    throw new Error("No active session.");
+  }
+
+  const result = db
+    .prepare(
+      `UPDATE customers SET is_deleted = 1 WHERE id = ? AND is_deleted = 0`,
+    )
+    .run(id);
+
+  if (result.changes === 0) {
+    throw new Error("Customer not found or already deleted.");
+  }
+
+  return result.changes;
+}
+
+export function getScores() {
+  const session = readSession();
+  if (!session) throw new Error("No active session.");
+
+  const stmt = db.prepare(`
+    SELECT
+      scores.id,
+      scores.customer_id,
+      scores.score,
+      scores.date,
+      customers.name
+    FROM scores
+    INNER JOIN customers ON customers.id = scores.customer_id
+    WHERE customers.is_deleted = 0
+    ORDER BY scores.date DESC, scores.id DESC
+  `);
+
+  return stmt.all() as {
+    id: number;
+    customer_id: number;
+    score: number;
+    date: string;
+    name: string;
+  }[];
+}
+
 export function isDev(): boolean {
   return process.env.NODE_ENV === "development";
 }
