@@ -79,6 +79,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   initDb();
+  eraseSession();
 
   ipcMain.handle("session:erase", safeHandler(eraseSession));
   ipcMain.handle("session:read", safeHandler(readSession));

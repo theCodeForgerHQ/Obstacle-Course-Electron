@@ -476,7 +476,7 @@ export function createCustomer(input: Customer) {
     !input.gender ||
     !input.blood_group
   ) {
-    throw new Error("Missing required customer fields.");
+    throw new Error("Missing required participant fields.");
   }
 
   const phone = input.phone.replace(/\D/g, "");
@@ -530,7 +530,7 @@ export function updateCustomerProfile(
   updates: Partial<EditableProfileFields>,
 ): number {
   if (!customerId) {
-    throw new Error("Customer ID is required.");
+    throw new Error("Participant ID is required.");
   }
 
   const normalized = normalizeUpdates(updates);
@@ -559,7 +559,7 @@ export function deleteCustomer(id: number) {
     .run(id);
 
   if (result.changes === 0) {
-    throw new Error("Customer not found or already deleted.");
+    throw new Error("Participant not found or already deleted.");
   }
 
   return result.changes;

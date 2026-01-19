@@ -12,27 +12,30 @@ import { useEffect, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
-import { LayoutGrid, UserPlus, Trophy, Settings } from "lucide-react";
+import { LayoutGrid, Users, UserPlus, Trophy, Settings } from "lucide-react";
 import { cn } from "./lib/utils";
+import type { Session } from "../electron/utils";
+import CustomerRegistration from "./pages/CustomerRegisteration";
 
-type Page = "dashboard" | "customers" | "leaderboard" | "settings";
+type Page = "dashboard" | "participants" | "users" | "leaderboard" | "settings";
 
 const navItems: {
   key: Page;
   label: string;
   icon: React.ElementType;
+  requiresRole?: string[];
 }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutGrid },
-  { key: "customers", label: "Customers", icon: UserPlus },
+  { key: "participants", label: "Participants", icon: UserPlus },
   { key: "leaderboard", label: "Leaderboard", icon: Trophy },
+  {
+    key: "users",
+    label: "Users",
+    icon: Users,
+    requiresRole: ["OWNER", "MANAGER"],
+  },
   { key: "settings", label: "Settings", icon: Settings },
 ];
-
-type Session = {
-  userId: number;
-  username: string;
-  role: string;
-};
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -55,7 +58,7 @@ export default function App() {
     const res = await window.electron.ipcRenderer.invoke(
       "auth:login",
       identifier,
-      password
+      password,
     );
     if (res?.error) {
       setLoginError(res.error);
@@ -74,8 +77,9 @@ export default function App() {
           {activePage === "dashboard" && (
             <h1 className="text-xl font-semibold">Dashboard</h1>
           )}
-          {activePage === "customers" && (
-            <h1 className="text-xl font-semibold">Customer Registration</h1>
+          {activePage === "participants" && <CustomerRegistration />}
+          {activePage === "users" && (
+            <h1 className="text-xl font-semibold">User Registration</h1>
           )}
           {activePage === "leaderboard" && (
             <h1 className="text-xl font-semibold">Leaderboard</h1>
@@ -87,40 +91,47 @@ export default function App() {
 
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2">
           <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white shadow-sm px-2 py-2">
-            {navItems.map(({ key, label, icon: Icon }) => {
-              const active = activePage === key;
+            {navItems
+              .filter((item) => {
+                if (!item.requiresRole) return true;
+                return item.requiresRole.includes(session.role);
+              })
+              .map(({ key, label, icon: Icon }) => {
+                const active = activePage === key;
 
-              return (
-                <button
-                  key={key}
-                  onClick={() => setActivePage(key)}
-                  className={cn(
-                    "relative flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-300",
-                    active
-                      ? "bg-[#E8F5EF] text-gray-900"
-                      : "text-gray-500 hover:text-gray-900"
-                  )}
-                >
-                  <Icon
-                    size={18}
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setActivePage(key)}
                     className={cn(
-                      "transition-all duration-300",
-                      active ? "text-gray-900" : "text-gray-400"
-                    )}
-                  />
-
-                  {/* Label smoothly expands */}
-                  <span
-                    className={cn(
-                      "overflow-hidden whitespace-nowrap transition-all duration-300",
-                      active ? "max-w-[120px] opacity-100" : "max-w-0 opacity-0"
+                      "relative flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-300",
+                      active
+                        ? "bg-[#E8F5EF] text-gray-900"
+                        : "text-gray-500 hover:text-gray-900",
                     )}
                   >
-                    {label}
-                  </span>
-                </button>
-              );
-            })}
+                    <Icon
+                      size={18}
+                      className={cn(
+                        "transition-all duration-300",
+                        active ? "text-gray-900" : "text-gray-400",
+                      )}
+                    />
+
+                    {/* Label smoothly expands */}
+                    <span
+                      className={cn(
+                        "overflow-hidden whitespace-nowrap transition-all duration-300",
+                        active
+                          ? "max-w-[120px] opacity-100"
+                          : "max-w-0 opacity-0",
+                      )}
+                    >
+                      {label}
+                    </span>
+                  </button>
+                );
+              })}
           </div>
         </div>
       </div>
