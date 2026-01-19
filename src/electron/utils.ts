@@ -299,18 +299,6 @@ export function demoteUserToOperator(userId: number): void {
     throw new Error("User not found or cannot be demoted.");
 }
 
-export function verifyPasswordForUpdate(password: string): boolean {
-  const session = readSession();
-  if (!session) return false;
-
-  const user = db
-    .prepare(`SELECT password_hash FROM users WHERE id = ? AND is_deleted = 0`)
-    .get(session.userId) as any;
-  if (!user) return false;
-
-  return verifyPasswordHash(password, user.password_hash);
-}
-
 export function updatePassword(oldPassword: string, newPassword: string): void {
   const session = readSession();
   if (!session) {

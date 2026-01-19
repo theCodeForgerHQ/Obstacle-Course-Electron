@@ -5,18 +5,17 @@ import {
   eraseSession,
   readSession,
   createUser,
-  getCurrentUserInfo,
+  getCurrentUser,
   getAllUsers,
   deleteUser,
   promoteUserToManager,
   demoteUserToOperator,
-  verifyPassword,
   updatePassword,
-  updatePhoneNumber,
+  updateUserProfile,
   loginUser,
   createCustomer,
   getCustomers,
-  updateCustomer,
+  updateCustomerProfile,
   deleteCustomer,
   getScores,
   isDev,
@@ -85,20 +84,19 @@ app.whenReady().then(() => {
   ipcMain.handle("session:read", safeHandler(readSession));
 
   ipcMain.handle("user:create", safeHandler(createUser));
-  ipcMain.handle("user:current", safeHandler(getCurrentUserInfo));
+  ipcMain.handle("user:current", safeHandler(getCurrentUser));
   ipcMain.handle("user:list", safeHandler(getAllUsers));
   ipcMain.handle("user:delete", safeHandler(deleteUser));
   ipcMain.handle("user:promoteToManager", safeHandler(promoteUserToManager));
   ipcMain.handle("user:demoteToOperator", safeHandler(demoteUserToOperator));
 
   ipcMain.handle("auth:login", safeHandler(loginUser));
-  ipcMain.handle("auth:verifyPassword", safeHandler(verifyPassword));
   ipcMain.handle("auth:updatePassword", safeHandler(updatePassword));
-  ipcMain.handle("auth:updatePhone", safeHandler(updatePhoneNumber));
+  ipcMain.handle("auth:updatePhone", safeHandler(updateUserProfile));
 
   ipcMain.handle("customer:create", safeHandler(createCustomer));
   ipcMain.handle("customer:list", safeHandler(getCustomers));
-  ipcMain.handle("customer:update", safeHandler(updateCustomer));
+  ipcMain.handle("customer:update", safeHandler(updateCustomerProfile));
   ipcMain.handle("customer:delete", safeHandler(deleteCustomer));
 
   ipcMain.handle("scores:list", safeHandler(getScores));
