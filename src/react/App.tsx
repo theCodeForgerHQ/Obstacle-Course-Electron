@@ -15,7 +15,8 @@ import { Input } from "./components/ui/input";
 import { LayoutGrid, Users, UserPlus, Trophy, Settings } from "lucide-react";
 import { cn } from "./lib/utils";
 import type { Session } from "../electron/utils";
-import CustomerRegistration from "./pages/CustomerRegisteration";
+import CustomerRegistration from "./pages/CustomerDirectory";
+import UsersDirectory from "./pages/UserDirectory";
 
 type Page = "dashboard" | "participants" | "users" | "leaderboard" | "settings";
 
@@ -77,9 +78,7 @@ export default function App() {
             <h1 className="text-xl font-semibold">Dashboard</h1>
           )}
           {activePage === "participants" && <CustomerRegistration />}
-          {activePage === "users" && (
-            <h1 className="text-xl font-semibold">User Registration</h1>
-          )}
+          {activePage === "users" && <UsersDirectory />}
           {activePage === "leaderboard" && (
             <h1 className="text-xl font-semibold">Leaderboard</h1>
           )}
