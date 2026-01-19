@@ -28,7 +28,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export function safeHandler<Args extends any[] = any[], Return = any>(
-  fn: (...args: Args) => Return | Promise<Return>
+  fn: (...args: Args) => Return | Promise<Return>,
 ) {
   return async (
     _event: IpcMainInvokeEvent,
@@ -37,7 +37,16 @@ export function safeHandler<Args extends any[] = any[], Return = any>(
     try {
       return await fn(...args);
     } catch (err) {
-      return { error: err instanceof Error ? err.message : String(err) };
+      const message =
+        err instanceof Error &&
+        "code" in err &&
+        String(err.message).includes("UNIQUE")
+          ? "Duplicate value."
+          : err instanceof Error
+            ? err.message
+            : String(err);
+
+      return { error: message };
     }
   };
 }
