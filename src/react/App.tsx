@@ -72,7 +72,6 @@ export default function App() {
   if (session) {
     return (
       <div className="min-h-screen bg-[#FAFAFA] pb-24">
-        {/* Main content */}
         <div className="p-8">
           {activePage === "dashboard" && (
             <h1 className="text-xl font-semibold">Dashboard</h1>
@@ -118,7 +117,6 @@ export default function App() {
                       )}
                     />
 
-                    {/* Label smoothly expands */}
                     <span
                       className={cn(
                         "overflow-hidden whitespace-nowrap transition-all duration-300",
@@ -141,7 +139,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#E8F5EF] flex items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-2xl bg-white shadow-sm border border-gray-100 p-8">
-        {/* Title */}
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-semibold text-gray-900">
             Obstacle Course
@@ -149,7 +146,6 @@ export default function App() {
           <p className="text-sm text-gray-500 mt-1">Sign in to continue</p>
         </div>
 
-        {/* Form */}
         <div className="space-y-5">
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-gray-600">
@@ -195,7 +191,6 @@ export default function App() {
           </Button>
         </div>
 
-        {/* Footer */}
         <div className="mt-8 text-center text-xs text-gray-400">
           © {new Date().getFullYear()} Obstacle Course
         </div>

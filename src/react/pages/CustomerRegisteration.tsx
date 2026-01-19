@@ -29,7 +29,15 @@ import {
 } from "../components/ui/select";
 import type { Customer } from "../../electron/utils";
 
-type SortKey = "created_at" | "name" | "id";
+interface Score {
+  id: number;
+  customer_id: number;
+  score: number;
+  date: string;
+  name: string;
+}
+
+type SortKey = "name" | "id" | "score";
 type SortDir = "asc" | "desc";
 
 const emptyDraft: Customer = {
@@ -44,23 +52,40 @@ const emptyDraft: Customer = {
 };
 
 const bloodGroups = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
+const genders = ["M", "F", "O"];
+const genderLabels: Record<string, string> = {
+  M: "Male",
+  F: "Female",
+  O: "Other",
+};
 
 function CustomerRegistration() {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [scores, setScores] = useState<Score[]>([]);
+  const [customerScoreMap, setCustomerScoreMap] = useState<
+    Record<number, number>
+  >({});
   const [loadingCustomers, setLoadingCustomers] = useState(true);
   const [customerError, setCustomerError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
   const [bloodFilter, setBloodFilter] = useState<string>("all");
-  const [sortKey, setSortKey] = useState<SortKey>("created_at");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [genderFilter, setGenderFilter] = useState<string>("all");
+  const [ageFrom, setAgeFrom] = useState<string>("");
+  const [ageTo, setAgeTo] = useState<string>("");
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [showForm, setShowForm] = useState(false);
+  const [showScoresModal, setShowScoresModal] = useState(false);
+  const [selectedCustomerForScores, setSelectedCustomerForScores] =
+    useState<Customer | null>(null);
   const [draft, setDraft] = useState<Customer>(emptyDraft);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     refreshCustomers();
+    refreshScores();
   }, []);
 
   async function refreshCustomers() {
@@ -82,6 +107,42 @@ function CustomerRegistration() {
     }
   }
 
+  async function refreshScores() {
+    try {
+      const result = await window.electron.ipcRenderer.invoke("scores:list");
+      if (result && typeof result === "object" && "error" in result) {
+        throw new Error(result.error as string);
+      }
+      setScores(result as Score[]);
+
+      // Calculate score sum per customer
+      const scoreMap: Record<number, number> = {};
+      (result as Score[]).forEach((score) => {
+        if (!scoreMap[score.customer_id]) {
+          scoreMap[score.customer_id] = 0;
+        }
+        scoreMap[score.customer_id] += score.score;
+      });
+      setCustomerScoreMap(scoreMap);
+    } catch (e) {
+      console.error("Error loading scores:", e);
+    }
+  }
+
+  function calculateAge(dateOfBirth: string): number {
+    const today = new Date();
+    const birthDate = new Date(dateOfBirth);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < birthDate.getDate())
+    ) {
+      age--;
+    }
+    return age;
+  }
+
   const filtered = useMemo(() => {
     const term = customerSearch.trim().toLowerCase();
     let rows = customers.filter((c) => {
@@ -100,16 +161,27 @@ function CustomerRegistration() {
       const matchesBlood =
         bloodFilter === "all" ||
         (c.blood_group ?? "").toUpperCase() === bloodFilter;
-      return matchesSearch && matchesBlood;
+      const matchesGender = genderFilter === "all" || c.gender === genderFilter;
+
+      let matchesAge = true;
+      if (ageFrom || ageTo) {
+        const age = calculateAge(c.date_of_birth);
+        if (ageFrom && age < parseInt(ageFrom)) matchesAge = false;
+        if (ageTo && age > parseInt(ageTo)) matchesAge = false;
+      }
+
+      return matchesSearch && matchesBlood && matchesGender && matchesAge;
     });
 
     rows = rows.sort((a, b) => {
       const dir = sortDir === "asc" ? 1 : -1;
-      if (sortKey === "created_at") {
-        const dateA = new Date(a.created_at ?? 0).getTime();
-        const dateB = new Date(b.created_at ?? 0).getTime();
-        return (dateA - dateB) * dir;
+
+      if (sortKey === "score") {
+        const scoreA = customerScoreMap[a.id ?? 0] ?? 0;
+        const scoreB = customerScoreMap[b.id ?? 0] ?? 0;
+        return (scoreA - scoreB) * dir;
       }
+
       const valA = (a[sortKey] ?? "").toString().toLowerCase();
       const valB = (b[sortKey] ?? "").toString().toLowerCase();
       if (valA < valB) return -1 * dir;
@@ -118,12 +190,32 @@ function CustomerRegistration() {
     });
 
     return rows;
-  }, [bloodFilter, customers, customerSearch, sortDir, sortKey]);
+  }, [
+    bloodFilter,
+    genderFilter,
+    customers,
+    customerSearch,
+    sortDir,
+    sortKey,
+    customerScoreMap,
+    ageFrom,
+    ageTo,
+  ]);
 
   function openCreate() {
     setDraft(emptyDraft);
     setEditing(null);
     setShowForm(true);
+  }
+
+  function openScoresModal(row: Customer) {
+    setSelectedCustomerForScores(row);
+    setShowScoresModal(true);
+  }
+
+  function closeScoresModal() {
+    setShowScoresModal(false);
+    setSelectedCustomerForScores(null);
   }
 
   function openEdit(row: Customer) {
@@ -263,7 +355,7 @@ function CustomerRegistration() {
       <header className="flex justify-between items-start gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-semibold text-gray-900">
-            Participants Registrations
+            Participants Directory
           </h1>
           <p className="text-sm text-gray-600 mt-1">
             Manage Participants, Emergency Contacts, and Medical Details.
@@ -272,7 +364,7 @@ function CustomerRegistration() {
         <Button onClick={openCreate}>Add Participant</Button>
       </header>
       <section className="bg-white border border-gray-200 rounded-xl p-4 mb-4 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
           <div className="flex flex-col gap-1.5">
             <label className="text-sm text-gray-700">Search</label>
             <Input
@@ -299,6 +391,22 @@ function CustomerRegistration() {
             </Select>
           </div>
           <div className="flex flex-col gap-1.5">
+            <label className="text-sm text-gray-700">Gender</label>
+            <Select value={genderFilter} onValueChange={setGenderFilter}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                {genders.map((g) => (
+                  <SelectItem key={g} value={g}>
+                    {genderLabels[g]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1.5">
             <label className="text-sm text-gray-700">Sort by</label>
             <div className="flex gap-2">
               <Select
@@ -309,9 +417,9 @@ function CustomerRegistration() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="created_at">Date Registered</SelectItem>
                   <SelectItem value="name">Name</SelectItem>
                   <SelectItem value="id">ID</SelectItem>
+                  <SelectItem value="score">Score</SelectItem>
                 </SelectContent>
               </Select>
               <Button
@@ -322,6 +430,30 @@ function CustomerRegistration() {
                 {sortDir === "asc" ? "↑ Asc" : "↓ Desc"}
               </Button>
             </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm text-gray-700">Age From</label>
+            <Input
+              type="number"
+              placeholder="Min age"
+              min="0"
+              max="150"
+              value={ageFrom}
+              onChange={(e) => setAgeFrom(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm text-gray-700">Age To</label>
+            <Input
+              type="number"
+              placeholder="Max age"
+              min="0"
+              max="150"
+              value={ageTo}
+              onChange={(e) => setAgeTo(e.target.value)}
+            />
           </div>
         </div>
       </section>
@@ -349,6 +481,9 @@ function CustomerRegistration() {
                   </th>
                   <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
                     Name
+                  </th>
+                  <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
+                    Score
                   </th>
                   <th className="text-left text-xs font-semibold text-gray-600 px-4 py-3">
                     Email
@@ -386,7 +521,7 @@ function CustomerRegistration() {
                     className={`cursor-pointer hover:bg-gray-50 transition-colors ${
                       idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"
                     }`}
-                    onClick={() => openEdit(row)}
+                    onClick={() => openScoresModal(row)}
                   >
                     <td className="px-4 py-3">
                       <div className="font-mono text-sm">
@@ -395,6 +530,11 @@ function CustomerRegistration() {
                     </td>
                     <td className="px-4 py-3 font-medium text-sm whitespace-nowrap">
                       {row.name}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="font-mono text-sm">
+                        {customerScoreMap[row.id ?? 0] ?? 0}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-sm">{row.email}</td>
                     <td className="px-4 py-3 max-w-[200px]">
@@ -628,6 +768,72 @@ function CustomerRegistration() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showScoresModal} onOpenChange={closeScoresModal}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              Scores for {selectedCustomerForScores?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Total Score:{" "}
+              <span className="font-semibold">
+                {customerScoreMap[selectedCustomerForScores?.id ?? 0] ?? 0}
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-80 overflow-y-auto">
+            {selectedCustomerForScores &&
+            scores.filter((s) => s.customer_id === selectedCustomerForScores.id)
+              .length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                No scores recorded yet.
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="border-b border-gray-200 bg-gray-50 sticky top-0">
+                  <tr>
+                    <th className="text-left px-3 py-2 font-semibold text-gray-700">
+                      Date
+                    </th>
+                    <th className="text-right px-3 py-2 font-semibold text-gray-700">
+                      Score
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedCustomerForScores &&
+                    scores
+                      .filter(
+                        (s) => s.customer_id === selectedCustomerForScores.id,
+                      )
+                      .sort(
+                        (a, b) =>
+                          new Date(b.date).getTime() -
+                          new Date(a.date).getTime(),
+                      )
+                      .map((score) => (
+                        <tr
+                          key={score.id}
+                          className="border-b border-gray-100 hover:bg-gray-50"
+                        >
+                          <td className="px-3 py-2">
+                            {new Date(score.date + "T00:00:00")
+                              .toLocaleDateString("en-GB")
+                              .replace(/\//g, "-")}
+                          </td>
+                          <td className="text-right px-3 py-2 font-">
+                            {score.score}
+                          </td>
+                        </tr>
+                      ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
