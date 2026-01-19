@@ -266,6 +266,212 @@ export function getAllUsers(): User[] {
   return stmt.all() as User[];
 }
 
+function requireOwnerSession() {
+  const session = readSession();
+  if (!session || session.role !== "OWNER")
+    throw new Error("Permission denied.");
+  return session;
+}
+
+export function promoteUserToManager(userId: number): void {
+  requireOwnerSession();
+  if (!userId) throw new Error("User ID is required.");
+
+  const result = db
+    .prepare(
+      `UPDATE users SET role = 'MANAGER' WHERE id = ? AND role = 'OPERATOR'`,
+    )
+    .run(userId);
+  if (result.changes === 0)
+    throw new Error("User not found or cannot be promoted.");
+}
+
+export function demoteUserToOperator(userId: number): void {
+  requireOwnerSession();
+  if (!userId) throw new Error("User ID is required.");
+
+  const result = db
+    .prepare(
+      `UPDATE users SET role = 'OPERATOR' WHERE id = ? AND role = 'MANAGER'`,
+    )
+    .run(userId);
+  if (result.changes === 0)
+    throw new Error("User not found or cannot be demoted.");
+}
+
+export function verifyPasswordForUpdate(password: string): boolean {
+  const session = readSession();
+  if (!session) return false;
+
+  const user = db
+    .prepare(`SELECT password_hash FROM users WHERE id = ? AND is_deleted = 0`)
+    .get(session.userId) as any;
+  if (!user) return false;
+
+  return verifyPasswordHash(password, user.password_hash);
+}
+
+export function updatePassword(oldPassword: string, newPassword: string): void {
+  const session = readSession();
+  if (!session) {
+    throw new Error("No active session.");
+  }
+
+  if (!oldPassword || !newPassword) {
+    throw new Error("Old password and new password are required.");
+  }
+
+  if (!isStrongPassword(newPassword)) {
+    throw new Error("New password is not strong enough.");
+  }
+
+  const user = db
+    .prepare(`SELECT password_hash FROM users WHERE id = ? AND is_deleted = 0`)
+    .get(session.userId) as any;
+
+  if (!user) {
+    throw new Error("User not found.");
+  }
+
+  if (!verifyPasswordHash(oldPassword, user.password_hash)) {
+    throw new Error("Old password is incorrect.");
+  }
+
+  const result = db
+    .prepare(
+      `UPDATE users SET password_hash = ? WHERE id = ? AND is_deleted = 0`,
+    )
+    .run(hashPassword(newPassword), session.userId);
+
+  if (result.changes === 0) {
+    throw new Error("Password update failed.");
+  }
+}
+
+type EditableProfileFields = Pick<
+  Customer,
+  | "name"
+  | "email"
+  | "phone"
+  | "emergency_contact"
+  | "address"
+  | "date_of_birth"
+  | "gender"
+  | "blood_group"
+>;
+
+function normalizeUpdates(updates: Partial<EditableProfileFields>) {
+  const normalized: Partial<EditableProfileFields> = { ...updates };
+
+  if (normalized.phone) {
+    normalized.phone = normalized.phone.replace(/\D/g, "");
+    if (!/^\d{10}$/.test(normalized.phone)) {
+      throw new Error("Phone number must be 10 digits.");
+    }
+  }
+
+  if (normalized.emergency_contact) {
+    normalized.emergency_contact = normalized.emergency_contact.replace(
+      /\D/g,
+      "",
+    );
+    if (!/^\d{10}$/.test(normalized.emergency_contact)) {
+      throw new Error("Emergency contact number must be 10 digits.");
+    }
+  }
+
+  if (normalized.email) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized.email)) {
+      throw new Error("Invalid email address.");
+    }
+  }
+
+  if (normalized.gender && !["M", "F", "O"].includes(normalized.gender)) {
+    throw new Error("Invalid gender.");
+  }
+
+  return normalized;
+}
+
+function buildSetClause(updates: Partial<EditableProfileFields>) {
+  const columnMap = {
+    name: "name",
+    email: "email",
+    phone: "phone",
+    emergency_contact: "emergency_contact",
+    address: "address",
+    date_of_birth: "date_of_birth",
+    gender: "gender",
+    blood_group: "blood_group",
+  } as const;
+
+  const entries = Object.entries(updates).filter(
+    ([, value]) => value !== undefined,
+  );
+
+  if (entries.length === 0) {
+    return null;
+  }
+
+  return entries
+    .map(([key]) => `${columnMap[key as keyof typeof columnMap]} = @${key}`)
+    .join(", ");
+}
+
+export function updateUserProfile(
+  updates: Partial<EditableProfileFields>,
+): number {
+  const session = readSession();
+  if (!session) {
+    throw new Error("No active session.");
+  }
+
+  const normalized = normalizeUpdates(updates);
+  const setClause = buildSetClause(normalized);
+  if (!setClause) return 0;
+
+  const result = db
+    .prepare(`UPDATE users SET ${setClause} WHERE id = @id AND is_deleted = 0`)
+    .run({ id: session.userId, ...normalized });
+
+  return result.changes;
+}
+
+export function deleteUser(userId: number): void {
+  const session = readSession();
+  if (!session) {
+    throw new Error("Permission denied.");
+  }
+
+  if (session.userId === userId) {
+    throw new Error("You cannot delete your own account.");
+  }
+
+  let stmt;
+
+  if (session.role === "OWNER") {
+    stmt = db.prepare(
+      `UPDATE users
+       SET is_deleted = 1
+       WHERE id = ? AND role IN ('MANAGER', 'OPERATOR')`,
+    );
+  } else if (session.role === "MANAGER") {
+    stmt = db.prepare(
+      `UPDATE users
+       SET is_deleted = 1
+       WHERE id = ? AND role = 'OPERATOR'`,
+    );
+  } else {
+    throw new Error("Permission denied.");
+  }
+
+  const result = stmt.run(userId);
+
+  if (result.changes === 0) {
+    throw new Error("User cannot be deleted.");
+  }
+}
+
 export function isDev(): boolean {
   return process.env.NODE_ENV === "development";
 }
