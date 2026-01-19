@@ -29,7 +29,7 @@ import {
 } from "../components/ui/dialog";
 import type { Session, User } from "../../electron/utils";
 
-type SortKey = "name" | "id" | "role";
+type SortKey = "name" | "id";
 type SortDir = "asc" | "desc";
 
 const bloodGroups = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
@@ -347,7 +347,7 @@ function UsersDirectory() {
                 <SelectItem value="all">All</SelectItem>
                 {roles.map((r) => (
                   <SelectItem key={r} value={r}>
-                    {r}
+                    {r[0] + r.slice(1).toLowerCase()}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -366,7 +366,6 @@ function UsersDirectory() {
                 <SelectContent>
                   <SelectItem value="name">Name</SelectItem>
                   <SelectItem value="id">ID</SelectItem>
-                  <SelectItem value="role">Role</SelectItem>
                 </SelectContent>
               </Select>
               <Button

@@ -226,8 +226,8 @@ export function createUser(input: User) {
 
 export function getCurrentUser(): User | null {
   const session = readSession();
-  if (session === null) {
-    return null;
+  if (!session) {
+    throw new Error("No active session.");
   }
 
   const user = db
@@ -255,8 +255,8 @@ export function getCurrentUser(): User | null {
 
 export function getAllUsers(): User[] {
   const session = readSession();
-  if (!session || (session.role !== "MANAGER" && session.role !== "OWNER")) {
-    throw new Error("Permission denied.");
+  if (!session) {
+    throw new Error("No active session.");
   }
 
   const stmt = db.prepare(
@@ -514,7 +514,7 @@ export function createCustomer(input: Customer) {
 
 export function getCustomers(): Customer[] {
   const session = readSession();
-  if (!session || (session.role !== "MANAGER" && session.role !== "OWNER")) {
+  if (!session) {
     throw new Error("Permission denied.");
   }
 
@@ -529,6 +529,11 @@ export function updateCustomerProfile(
   customerId: number,
   updates: Partial<EditableProfileFields>,
 ): number {
+  const session = readSession();
+  if (!session) {
+    throw new Error("Permission denied.");
+  }
+
   if (!customerId) {
     throw new Error("Participant ID is required.");
   }
