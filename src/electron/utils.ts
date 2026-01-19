@@ -154,6 +154,118 @@ export function loginUser(text: string, password: string): Session | null {
   return createSession({ id: user.id, role: user.role });
 }
 
+function hashPassword(password: string): string {
+  return bcrypt.hashSync(password, BCRYPT_ROUNDS);
+}
+
+function isStrongPassword(password: string): boolean {
+  if (password.length < 8) return false;
+  if (!/[A-Z]/.test(password)) return false;
+  if (!/[a-z]/.test(password)) return false;
+  if (!/[0-9]/.test(password)) return false;
+  if (!/[!@#$%^&*]/.test(password)) return false;
+  return true;
+}
+
+export function createUser(input: User) {
+  const session = readSession();
+  if (
+    session === null ||
+    (session.role !== "MANAGER" && session.role !== "OWNER")
+  ) {
+    throw new Error("Permission denied.");
+  }
+
+  if (
+    !input.name ||
+    !input.email ||
+    !input.phone ||
+    !input.emergency_contact ||
+    !input.address ||
+    !input.date_of_birth ||
+    !input.gender ||
+    !input.blood_group ||
+    !input.password
+  ) {
+    throw new Error("All fields are required.");
+  }
+
+  if (!/^\d{10}$/.test(input.phone.replace(/\D/g, ""))) {
+    throw new Error("Phone number must be 10 digits.");
+  }
+
+  if (!/^\d{10}$/.test(input.emergency_contact.replace(/\D/g, ""))) {
+    throw new Error("Emergency Contact number must be 10 digits.");
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) {
+    throw new Error("Invalid email address.");
+  }
+
+  if (!isStrongPassword(input.password)) {
+    throw new Error("Password is not strong enough.");
+  }
+
+  const stmt = db.prepare(
+    `INSERT INTO users (name, email, phone, password_hash, gender, emergency_contact, address, date_of_birth, blood_group) 
+         VALUES (@name, @email, @phone, @passwordHash, @gender, @emergency_contact, @address, @date_of_birth, @blood_group)`,
+  );
+  const result = stmt.run({
+    name: input.name,
+    email: input.email,
+    phone: input.phone,
+    passwordHash: hashPassword(input.password),
+    gender: input.gender,
+    emergency_contact: input.emergency_contact,
+    address: input.address,
+    date_of_birth: input.date_of_birth,
+    blood_group: input.blood_group,
+  });
+  return result.lastInsertRowid;
+}
+
+export function getCurrentUser(): User | null {
+  const session = readSession();
+  if (session === null) {
+    return null;
+  }
+
+  const user = db
+    .prepare(`SELECT * FROM users WHERE id = ? and is_deleted = 0`)
+    .get(session.userId) as User | null;
+
+  if (!user) {
+    return null;
+  }
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    phone: user.phone,
+    emergency_contact: user.emergency_contact,
+    address: user.address,
+    date_of_birth: user.date_of_birth,
+    gender: user.gender as "M" | "F" | "O",
+    blood_group: user.blood_group,
+    created_at: user.created_at,
+    role: user.role,
+  };
+}
+
+export function getAllUsers(): User[] {
+  const session = readSession();
+  if (!session || (session.role !== "MANAGER" && session.role !== "OWNER")) {
+    throw new Error("Permission denied.");
+  }
+
+  const stmt = db.prepare(
+    `SELECT id, name, email, phone, emergency_contact, address, date_of_birth, gender, blood_group, created_at, role FROM users WHERE is_deleted = 0 AND role != 'OWNER' ORDER BY id ASC`,
+  );
+
+  return stmt.all() as User[];
+}
+
 export function isDev(): boolean {
   return process.env.NODE_ENV === "development";
 }
