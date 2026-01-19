@@ -17,6 +17,7 @@ import { cn } from "./lib/utils";
 import type { Session } from "../electron/utils";
 import CustomerRegistration from "./pages/CustomerDirectory";
 import UsersDirectory from "./pages/UserDirectory";
+import ProfileSettings from "./pages/ProfileSettings";
 
 type Page = "dashboard" | "participants" | "users" | "leaderboard" | "settings";
 
@@ -82,9 +83,7 @@ export default function App() {
           {activePage === "leaderboard" && (
             <h1 className="text-xl font-semibold">Leaderboard</h1>
           )}
-          {activePage === "settings" && (
-            <h1 className="text-xl font-semibold">Settings</h1>
-          )}
+          {activePage === "settings" && <ProfileSettings />}
         </div>
 
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2">

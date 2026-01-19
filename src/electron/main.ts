@@ -92,8 +92,8 @@ app.whenReady().then(() => {
   ipcMain.handle("user:demoteToOperator", safeHandler(demoteUserToOperator));
 
   ipcMain.handle("auth:login", safeHandler(loginUser));
-  ipcMain.handle("auth:updatePassword", safeHandler(updatePassword));
-  ipcMain.handle("auth:updatePhone", safeHandler(updateUserProfile));
+  ipcMain.handle("user:updatePassword", safeHandler(updatePassword));
+  ipcMain.handle("user:updateProfile", safeHandler(updateUserProfile));
 
   ipcMain.handle("customer:create", safeHandler(createCustomer));
   ipcMain.handle("customer:list", safeHandler(getCustomers));
