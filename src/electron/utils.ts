@@ -108,6 +108,52 @@ export function initDb() {
   ).run();
 }
 
+function createSession(user: {
+  id: number;
+  role: "OWNER" | "MANAGER" | "OPERATOR";
+}): Session | null {
+  eraseSession();
+  db.prepare(
+    `INSERT INTO sessions (user_id, role) VALUES (@userId, @role)`,
+  ).run({ userId: user.id, role: user.role });
+
+  return readSession();
+}
+
+export function eraseSession() {
+  db.prepare(`DELETE FROM sessions`).run();
+}
+
+export function readSession(): Session | null {
+  const stmt = db.prepare(`
+      SELECT
+        user_id AS userId,
+        role
+      FROM sessions
+      LIMIT 1
+    `);
+  return stmt.get() as Session | null;
+}
+
+function verifyPasswordHash(password: string, hash: string): boolean {
+  return bcrypt.compareSync(password, hash);
+}
+
+export function loginUser(text: string, password: string): Session | null {
+  const user = db
+    .prepare(
+      `SELECT * FROM users WHERE (name = ? OR email = ?) AND is_deleted = 0`,
+    )
+    .get(text, text) as any;
+
+  if (!user) throw new Error("User not found.");
+
+  if (!verifyPasswordHash(password, user.password_hash))
+    throw new Error("Invalid password.");
+
+  return createSession({ id: user.id, role: user.role });
+}
+
 export function isDev(): boolean {
   return process.env.NODE_ENV === "development";
 }
