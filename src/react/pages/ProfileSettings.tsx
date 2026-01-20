@@ -1,13 +1,3 @@
-declare global {
-  interface Window {
-    electron: {
-      ipcRenderer: {
-        invoke(channel: string, ...args: any[]): Promise<any>;
-      };
-    };
-  }
-}
-
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Button } from "../components/ui/button";
@@ -90,34 +80,61 @@ function ProfileSettings() {
     setSavingProfile(true);
     setError(null);
 
-    const required: (keyof ProfileDraft)[] = [
-      "name",
-      "email",
-      "phone",
-      "emergency_contact",
-      "address",
-      "date_of_birth",
-      "gender",
-      "blood_group",
-    ];
-
-    for (const key of required) {
-      const value = profile[key];
-      if (!value || (typeof value === "string" && !value.trim())) {
-        setError(`${key.replace(/_/g, " ")} is required.`);
-        setSavingProfile(false);
-        return;
-      }
-    }
-
     try {
-      const res = await window.electron.ipcRenderer.invoke(
+      const required: (keyof ProfileDraft)[] = [
+        "name",
+        "email",
+        "phone",
+        "emergency_contact",
+        "address",
+        "date_of_birth",
+        "gender",
+        "blood_group",
+      ];
+
+      for (const key of required) {
+        const value = profile[key];
+        if (!value || (typeof value === "string" && !value.trim())) {
+          const fieldName = key
+            .replace(/_/g, " ")
+            .replace(/\b\w/g, (c) => c.toUpperCase());
+          throw new Error(`${fieldName} is required.`);
+        }
+      }
+
+      if (!/^\d{10}$/.test(profile.phone)) {
+        throw new Error("Phone number must be exactly 10 digits.");
+      }
+
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email)) {
+        throw new Error("Invalid email address.");
+      }
+
+      const updates = {
+        name: profile.name.trim(),
+        email: profile.email.trim(),
+        phone: profile.phone.trim(),
+        emergency_contact: profile.emergency_contact.trim(),
+        address: profile.address.trim(),
+        date_of_birth: profile.date_of_birth.trim(),
+        gender: profile.gender,
+        blood_group: profile.blood_group.trim(),
+      };
+
+      const result = await window.electron.ipcRenderer.invoke(
         "user:updateProfile",
-        profile,
+        updates,
       );
-      if (res === 0) throw new Error("No changes were saved.");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Update failed.");
+
+      if (result && typeof result === "object" && "error" in result) {
+        throw new Error(result.error as string);
+      }
+
+      if (result === 0) {
+        throw new Error("No changes were saved.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Profile update failed.");
     } finally {
       setSavingProfile(false);
     }
@@ -128,22 +145,25 @@ function ProfileSettings() {
     setSavingPassword(true);
     setError(null);
 
-    if (!oldPassword || !newPassword) {
-      setError("Both password fields are required.");
-      setSavingPassword(false);
-      return;
-    }
-
     try {
-      await window.electron.ipcRenderer.invoke(
+      if (!oldPassword || !newPassword) {
+        throw new Error("Both password fields are required.");
+      }
+
+      const result = await window.electron.ipcRenderer.invoke(
         "user:updatePassword",
         oldPassword,
         newPassword,
       );
+
+      if (result && typeof result === "object" && "error" in result) {
+        throw new Error(result.error as string);
+      }
+
       setOldPassword("");
       setNewPassword("");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Password update failed.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Password update failed.");
     } finally {
       setSavingPassword(false);
     }
@@ -158,7 +178,7 @@ function ProfileSettings() {
   }
 
   return (
-    <div className="min-h-screen p-8 max-w-[900px] mx-auto space-y-6">
+    <div className="min-h-screen p-8 max-w-[1400px] mx-auto space-y-6">
       <header className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-semibold text-gray-900">
@@ -300,8 +320,11 @@ function ProfileSettings() {
       <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
         <h2 className="text-lg font-semibold mb-4">Update Password</h2>
 
-        <form onSubmit={submitPassword} className="space-y-4 max-w-md">
-          <div className="flex flex-col gap-1.5">
+        <form
+          onSubmit={submitPassword}
+          className="space-x-4 flex flex-row gap-4 items-end"
+        >
+          <div className="flex flex-col gap-1.5 w-2/3">
             <label className="text-sm font-medium">Old password</label>
             <Input
               type="password"
@@ -310,7 +333,7 @@ function ProfileSettings() {
             />
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5 w-2/3">
             <label className="text-sm font-medium">New password</label>
             <Input
               type="password"
@@ -319,7 +342,7 @@ function ProfileSettings() {
             />
           </div>
 
-          <Button type="submit" disabled={savingPassword}>
+          <Button type="submit" disabled={savingPassword} className="w-1/5">
             {savingPassword ? "Updating…" : "Update Password"}
           </Button>
         </form>

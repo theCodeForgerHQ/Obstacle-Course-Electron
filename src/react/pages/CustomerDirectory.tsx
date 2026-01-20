@@ -115,7 +115,6 @@ function CustomerRegistration() {
       }
       setScores(result as Score[]);
 
-      // Calculate score sum per customer
       const scoreMap: Record<number, number> = {};
       (result as Score[]).forEach((score) => {
         if (!scoreMap[score.customer_id]) {

@@ -1,13 +1,3 @@
-declare global {
-  interface Window {
-    electron: {
-      ipcRenderer: {
-        invoke(channel: string, ...args: any[]): Promise<any>;
-      };
-    };
-  }
-}
-
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Button } from "../components/ui/button";
