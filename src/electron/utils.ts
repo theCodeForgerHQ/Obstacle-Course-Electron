@@ -42,12 +42,12 @@ export interface Score {
 }
 
 export function initDb() {
-  if (process.env.NODE_ENV === "development" && process.env.RESET_DB === "1") {
-    db.prepare("DROP TABLE IF EXISTS scores").run();
-    db.prepare("DROP TABLE IF EXISTS sessions").run();
-    db.prepare("DROP TABLE IF EXISTS customers").run();
-    db.prepare("DROP TABLE IF EXISTS users").run();
-  }
+  // if (process.env.NODE_ENV === "development" && process.env.RESET_DB === "1") {
+  db.prepare("DROP TABLE IF EXISTS scores").run();
+  db.prepare("DROP TABLE IF EXISTS sessions").run();
+  db.prepare("DROP TABLE IF EXISTS customers").run();
+  db.prepare("DROP TABLE IF EXISTS users").run();
+  // }
 
   db.prepare(
     `CREATE TABLE IF NOT EXISTS customers (
@@ -106,6 +106,139 @@ export function initDb() {
   db.prepare(
     "CREATE INDEX IF NOT EXISTS idx_scores_customer_id_date ON scores (customer_id, date)",
   ).run();
+
+  const ownerPasswordHash = bcrypt.hashSync("Divyabai@1980", BCRYPT_ROUNDS);
+  db.prepare(
+    `INSERT INTO users (name, email, phone, password_hash, gender, emergency_contact, address, date_of_birth, blood_group, role) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'OWNER')`,
+  ).run(
+    "Ajayaditya",
+    "ajayaditya.dev@gmail.com",
+    "8838302442",
+    ownerPasswordHash,
+    "M",
+    "7708332769",
+    "8, 11th Cross, Thirumagal Nagar, Coimbatore",
+    "2006-04-01",
+    "O+",
+  );
+  db.prepare(
+    `INSERT INTO customers (name, email, phone, emergency_contact, address, date_of_birth, gender, blood_group) 
+   VALUES (@name, @email, @phone, @emergency_contact, @address, @date_of_birth, @gender, @blood_group)`,
+  ).run({
+    name: "John Doe",
+    email: "john.doe@example.com",
+    phone: "9876543210",
+    emergency_contact: "9123456789",
+    address: "123 Main St, Springfield",
+    date_of_birth: "1990-05-15",
+    gender: "M",
+    blood_group: "O+",
+  });
+
+  db.prepare(
+    `INSERT INTO customers (name, email, phone, emergency_contact, address, date_of_birth, gender, blood_group) 
+   VALUES (@name, @email, @phone, @emergency_contact, @address, @date_of_birth, @gender, @blood_group)`,
+  ).run({
+    name: "Jane Smith",
+    email: "jane.smith@example.com",
+    phone: "9123456789",
+    emergency_contact: "9876543210",
+    address: "456 Oak Ave, Shelbyville",
+    date_of_birth: "1992-08-22",
+    gender: "F",
+    blood_group: "A+",
+  });
+
+  const scores = [
+    { customerId: 1, scores: [150, 280, 425, 520, 380] },
+    { customerId: 2, scores: [200, 350, 475, 600, 290] },
+  ];
+
+  scores.forEach(({ customerId, scores: scoreList }) => {
+    scoreList.forEach((score) => {
+      const randomDays = Math.floor(Math.random() * 90);
+      const date = new Date();
+      date.setDate(date.getDate() - randomDays);
+      db.prepare(
+        `INSERT INTO scores (customer_id, score, date) VALUES (@customerId, @score, @date)`,
+      ).run({
+        customerId,
+        score,
+        date: date.toISOString().split("T")[0],
+      });
+    });
+  });
+  const managerPasswordHash1 = bcrypt.hashSync("ManagerPass1!", BCRYPT_ROUNDS);
+  const managerPasswordHash2 = bcrypt.hashSync("ManagerPass2!", BCRYPT_ROUNDS);
+  const operatorPasswordHash1 = bcrypt.hashSync(
+    "OperatorPass1!",
+    BCRYPT_ROUNDS,
+  );
+  const operatorPasswordHash2 = bcrypt.hashSync(
+    "OperatorPass2!",
+    BCRYPT_ROUNDS,
+  );
+
+  db.prepare(
+    `INSERT INTO users (name, email, phone, password_hash, gender, emergency_contact, address, date_of_birth, blood_group, role) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'MANAGER')`,
+  ).run(
+    "Alice Johnson",
+    "alice.johnson@example.com",
+    "1234567890",
+    managerPasswordHash1,
+    "F",
+    "0987654321",
+    "789 Pine St, Metropolis",
+    "1985-03-10",
+    "B+",
+  );
+
+  db.prepare(
+    `INSERT INTO users (name, email, phone, password_hash, gender, emergency_contact, address, date_of_birth, blood_group, role) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'MANAGER')`,
+  ).run(
+    "Bob Smith",
+    "bob.smith@example.com",
+    "2345678901",
+    managerPasswordHash2,
+    "M",
+    "1234567890",
+    "456 Elm St, Gotham",
+    "1990-07-15",
+    "A-",
+  );
+
+  db.prepare(
+    `INSERT INTO users (name, email, phone, password_hash, gender, emergency_contact, address, date_of_birth, blood_group, role) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPERATOR')`,
+  ).run(
+    "Charlie Brown",
+    "charlie.brown@example.com",
+    "3456789012",
+    operatorPasswordHash1,
+    "M",
+    "2345678901",
+    "321 Maple St, Star City",
+    "1995-11-20",
+    "O+",
+  );
+
+  db.prepare(
+    `INSERT INTO users (name, email, phone, password_hash, gender, emergency_contact, address, date_of_birth, blood_group, role) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPERATOR')`,
+  ).run(
+    "Diana Prince",
+    "diana.prince@example.com",
+    "4567890123",
+    operatorPasswordHash2,
+    "F",
+    "3456789012",
+    "654 Oak St, Themyscira",
+    "1992-05-25",
+    "AB+",
+  );
 }
 
 function createSession(user: {

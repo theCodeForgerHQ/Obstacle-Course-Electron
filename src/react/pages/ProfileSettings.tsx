@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
+import { Eye, EyeOff } from "lucide-react";
 
 type Gender = "M" | "F" | "O";
 
@@ -41,10 +42,12 @@ function ProfileSettings() {
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [showPasswords, setShowPasswords] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -62,7 +65,9 @@ function ProfileSettings() {
           blood_group: res.blood_group ?? "",
         });
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load profile.");
+        setProfileError(
+          e instanceof Error ? e.message : "Failed to load profile.",
+        );
       } finally {
         setLoading(false);
       }
@@ -78,7 +83,7 @@ function ProfileSettings() {
   async function submitProfile(e: FormEvent) {
     e.preventDefault();
     setSavingProfile(true);
-    setError(null);
+    setProfileError(null);
 
     try {
       const required: (keyof ProfileDraft)[] = [
@@ -134,7 +139,9 @@ function ProfileSettings() {
         throw new Error("No changes were saved.");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Profile update failed.");
+      setProfileError(
+        err instanceof Error ? err.message : "Profile update failed.",
+      );
     } finally {
       setSavingProfile(false);
     }
@@ -143,7 +150,7 @@ function ProfileSettings() {
   async function submitPassword(e: FormEvent) {
     e.preventDefault();
     setSavingPassword(true);
-    setError(null);
+    setPasswordError(null);
 
     try {
       if (!oldPassword || !newPassword) {
@@ -163,7 +170,9 @@ function ProfileSettings() {
       setOldPassword("");
       setNewPassword("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Password update failed.");
+      setPasswordError(
+        err instanceof Error ? err.message : "Password update failed.",
+      );
     } finally {
       setSavingPassword(false);
     }
@@ -182,7 +191,7 @@ function ProfileSettings() {
       <header className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-semibold text-gray-900">
-            Profile ProfileSettings
+            Profile Settings
           </h1>
           <p className="text-sm text-gray-600 mt-1">
             Manage your personal information and security.
@@ -193,9 +202,9 @@ function ProfileSettings() {
         </Button>
       </header>
 
-      {error && (
+      {profileError && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-800">
-          {error}
+          {profileError}
         </div>
       )}
 
@@ -317,6 +326,12 @@ function ProfileSettings() {
         </form>
       </section>
 
+      {passwordError && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-800">
+          {passwordError}
+        </div>
+      )}
+
       <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
         <h2 className="text-lg font-semibold mb-4">Update Password</h2>
 
@@ -326,20 +341,40 @@ function ProfileSettings() {
         >
           <div className="flex flex-col gap-1.5 w-2/3">
             <label className="text-sm font-medium">Old password</label>
-            <Input
-              type="password"
-              value={oldPassword}
-              onChange={(e) => setOldPassword(e.target.value)}
-            />
+            <div className="relative">
+              <Input
+                type={showPasswords ? "text" : "password"}
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPasswords(!showPasswords)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+              >
+                {showPasswords ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
 
           <div className="flex flex-col gap-1.5 w-2/3">
             <label className="text-sm font-medium">New password</label>
-            <Input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-            />
+            <div className="relative">
+              <Input
+                type={showPasswords ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPasswords(!showPasswords)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+              >
+                {showPasswords ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
 
           <Button type="submit" disabled={savingPassword} className="w-1/5">
