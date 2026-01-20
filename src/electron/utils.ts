@@ -36,7 +36,7 @@ export interface User extends Customer {
 export interface Score {
   id: number;
   name: string;
-  customerId: number;
+  customer_id: number;
   score: number;
   date: string;
 }

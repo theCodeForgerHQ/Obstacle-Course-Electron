@@ -1,5 +1,24 @@
+declare global {
+  interface Window {
+    electron: {
+      ipcRenderer: {
+        invoke(channel: string, ...args: any[]): Promise<any>;
+      };
+    };
+  }
+}
+
 import { useEffect, useMemo, useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../components/ui/dialog";
 import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
 import {
   Select,
   SelectContent,
@@ -7,305 +26,261 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Input } from "../components/ui/input";
 import type { Customer, Score } from "../../electron/utils";
 
-type TimeRange = "day" | "week" | "month" | "year" | "all";
+type TimeFilter = "today" | "week" | "month" | "year" | "all";
 
-type PanelConfig = {
-  id: string;
-  title: string;
-  range: TimeRange;
-  gender: "all" | "M" | "F" | "O";
-  minAge?: number;
-  maxAge?: number;
-};
+function calculateAge(dob: string) {
+  const today = new Date();
+  const birth = new Date(dob);
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
 
-export default function LeaderboardScreen() {
+function withinRange(date: string, filter: TimeFilter) {
+  if (filter === "all") return true;
+  const d = new Date(date);
+  const now = new Date();
+
+  if (filter === "today") return d.toDateString() === now.toDateString();
+
+  if (filter === "week") {
+    const start = new Date();
+    start.setDate(now.getDate() - 7);
+    return d >= start;
+  }
+
+  if (filter === "month")
+    return (
+      d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+    );
+
+  if (filter === "year") return d.getFullYear() === now.getFullYear();
+
+  return true;
+}
+
+export default function Leaderboard() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [scores, setScores] = useState<Score[]>([]);
-  const [customerScoreMap, setCustomerScoreMap] = useState<
-    Record<number, number>
-  >({});
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const [rows, setRows] = useState(1);
-  const [cols, setCols] = useState(2);
-  const [editMode, setEditMode] = useState(false);
-
-  const [panels, setPanels] = useState<PanelConfig[]>([
-    {
-      id: crypto.randomUUID(),
-      title: "Top Today",
-      range: "day",
-      gender: "all",
-    },
-    {
-      id: crypto.randomUUID(),
-      title: "Top This Week",
-      range: "week",
-      gender: "all",
-    },
-  ]);
+  const [ageFrom, setAgeFrom] = useState("");
+  const [ageTo, setAgeTo] = useState("");
+  const [gender, setGender] = useState("all");
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
+  const [showFilter, setShowFilter] = useState(false);
 
   useEffect(() => {
-    Promise.all([refreshCustomers(), refreshScores()])
-      .catch(() => {})
+    Promise.all([
+      window.electron.ipcRenderer.invoke("customer:list"),
+      window.electron.ipcRenderer.invoke("scores:list"),
+    ])
+      .then(([c, s]) => {
+        if (c?.error) throw new Error(c.error);
+        if (s?.error) throw new Error(s.error);
+        setCustomers(c);
+        setScores(s);
+      })
+      .catch((e) =>
+        setError(e instanceof Error ? e.message : "Failed to load leaderboard"),
+      )
       .finally(() => setLoading(false));
   }, []);
 
-  async function refreshCustomers() {
-    try {
-      const result = await window.electron.ipcRenderer.invoke("customer:list");
-      if (result && typeof result === "object" && "error" in result) {
-        throw new Error(result.error);
-      }
-      setCustomers(result as Customer[]);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to load customers";
-      setError(msg);
-    }
-  }
+  const ranked = useMemo(() => {
+    const scoreMap: Record<number, number> = {};
 
-  async function refreshScores() {
-    try {
-      const result = await window.electron.ipcRenderer.invoke("scores:list");
-      if (result && typeof result === "object" && "error" in result) {
-        throw new Error(result.error);
-      }
-      setScores(result as Score[]);
-
-      const map: Record<number, number> = {};
-      (result as Score[]).forEach((s) => {
-        map[s.customerId] = (map[s.customerId] || 0) + s.score;
-      });
-      setCustomerScoreMap(map);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to load scores";
-      setError(msg);
-    }
-  }
-
-  function addRow() {
-    setRows((r) => r + 1);
-  }
-
-  function addCol() {
-    setCols((c) => c + 1);
-  }
-
-  function addPanel() {
-    setPanels((p) => [
-      ...p,
-      {
-        id: crypto.randomUUID(),
-        title: "New Leaderboard",
-        range: "all",
-        gender: "all",
-      },
-    ]);
-  }
-
-  function scoresForRange(range: TimeRange) {
-    const now = new Date();
-    return scores.filter((s) => {
-      const d = new Date(s.date);
-      if (range === "day") return d.toDateString() === now.toDateString();
-      if (range === "week")
-        return d >= new Date(now.setDate(now.getDate() - 7));
-      if (range === "month")
-        return d >= new Date(now.setMonth(now.getMonth() - 1));
-      if (range === "year")
-        return d >= new Date(now.setFullYear(now.getFullYear() - 1));
-      return true;
-    });
-  }
-
-  function topTen(panel: PanelConfig) {
-    const relevantScores = scoresForRange(panel.range);
-    const map: Record<number, number> = {};
-
-    relevantScores.forEach((s) => {
-      map[s.customerId] = (map[s.customerId] || 0) + s.score;
+    scores.forEach((s) => {
+      if (!withinRange(s.date, timeFilter)) return;
+      scoreMap[s.customer_id] = (scoreMap[s.customer_id] ?? 0) + s.score;
     });
 
     return customers
       .filter((c) => {
-        if (panel.gender !== "all" && c.gender !== panel.gender) return false;
-        if (panel.minAge || panel.maxAge) {
-          const age =
-            new Date().getFullYear() - new Date(c.date_of_birth).getFullYear();
-          if (panel.minAge && age < panel.minAge) return false;
-          if (panel.maxAge && age > panel.maxAge) return false;
-        }
+        if (gender !== "all" && c.gender !== gender) return false;
+        const age = calculateAge(c.date_of_birth);
+        if (ageFrom && age < Number(ageFrom)) return false;
+        if (ageTo && age > Number(ageTo)) return false;
         return true;
       })
-      .map((c) => ({ ...c, total: map[c.id as number] || 0 }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 10);
-  }
+      .map((c) => ({
+        customer: c,
+        score: scoreMap[c.id ?? 0] ?? 0,
+      }))
+      .sort((a, b) => b.score - a.score)
+      .map((r, i) => ({ ...r, rank: i + 1 }));
+  }, [customers, scores, ageFrom, ageTo, gender, timeFilter]);
 
-  if (loading) {
-    return <div className="min-h-screen p-8 text-gray-500">Loading…</div>;
-  }
+  const topThree = ranked.slice(0, 3);
 
-  if (error) {
+  if (loading)
     return (
-      <div className="min-h-screen p-8 text-red-700 bg-red-50 border border-red-200 rounded-xl">
-        {error}
-      </div>
+      <div className="p-8 text-center text-gray-500">Loading Leaderboard…</div>
     );
-  }
 
   return (
-    <div className="min-h-screen p-8 max-w-[1400px] mx-auto space-y-6">
-      <header className="flex justify-between items-start">
+    <div className="min-h-screen p-8 max-w-[1400px] mx-auto">
+      <header className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-semibold text-gray-900">Leaderboard</h1>
+          <h1 className="text-3xl font-semibold">Leaderboard</h1>
           <p className="text-sm text-gray-600 mt-1">
-            Configure and display ranking panels
+            Top participants ranked by score
           </p>
         </div>
-        <Button onClick={() => setEditMode((e) => !e)}>
-          {editMode ? "Finish Editing" : "Edit Layout"}
-        </Button>
+        <Button onClick={() => setShowFilter(true)}>Filter</Button>
       </header>
 
-      {editMode && (
-        <div className="flex gap-3">
-          <Button variant="ghost" onClick={addRow}>
-            Add Row
-          </Button>
-          <Button variant="ghost" onClick={addCol}>
-            Add Column
-          </Button>
-          <Button onClick={addPanel}>Add Panel</Button>
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-6 text-sm text-red-800">
+          {error}
         </div>
       )}
 
-      <div
-        className="grid gap-4"
-        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
-      >
-        {panels.slice(0, rows * cols).map((panel) => (
-          <div
-            key={panel.id}
-            className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm"
-          >
-            {editMode ? (
-              <div className="space-y-3">
-                <Input
-                  value={panel.title}
-                  onChange={(e) =>
-                    setPanels((p) =>
-                      p.map((x) =>
-                        x.id === panel.id ? { ...x, title: e.target.value } : x,
-                      ),
-                    )
-                  }
-                />
-
-                <Select
-                  value={panel.range}
-                  onValueChange={(v) =>
-                    setPanels((p) =>
-                      p.map((x) =>
-                        x.id === panel.id ? { ...x, range: v as TimeRange } : x,
-                      ),
-                    )
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="day">Top Today</SelectItem>
-                    <SelectItem value="week">Top This Week</SelectItem>
-                    <SelectItem value="month">Top This Month</SelectItem>
-                    <SelectItem value="year">Top This Year</SelectItem>
-                    <SelectItem value="all">Top Since Start</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select
-                  value={panel.gender}
-                  onValueChange={(v) =>
-                    setPanels((p) =>
-                      p.map((x) =>
-                        x.id === panel.id ? { ...x, gender: v as any } : x,
-                      ),
-                    )
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Genders</SelectItem>
-                    <SelectItem value="M">Male</SelectItem>
-                    <SelectItem value="F">Female</SelectItem>
-                    <SelectItem value="O">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Min Age"
-                    type="number"
-                    value={panel.minAge ?? ""}
-                    onChange={(e) =>
-                      setPanels((p) =>
-                        p.map((x) =>
-                          x.id === panel.id
-                            ? {
-                                ...x,
-                                minAge: Number(e.target.value) || undefined,
-                              }
-                            : x,
-                        ),
-                      )
-                    }
-                  />
-                  <Input
-                    placeholder="Max Age"
-                    type="number"
-                    value={panel.maxAge ?? ""}
-                    onChange={(e) =>
-                      setPanels((p) =>
-                        p.map((x) =>
-                          x.id === panel.id
-                            ? {
-                                ...x,
-                                maxAge: Number(e.target.value) || undefined,
-                              }
-                            : x,
-                        ),
-                      )
-                    }
-                  />
-                </div>
+      <section className="grid grid-cols-3 gap-6 mb-8 items-end">
+        {[2, 1, 3].map((pos) => {
+          const entry = topThree.find((t) => t.rank === pos);
+          const rankImages: Record<number, string> = {
+            1: "/src/react/assets/rank_1.png",
+            2: "/src/react/assets/rank_2.png",
+            3: "/src/react/assets/rank_3.png",
+          };
+          return (
+            <div
+              key={pos}
+              className={`rounded-2xl p-6 text-center text-white flex flex-col justify-center items-center min-h-fit  ${
+                pos === 1
+                  ? "bg-gradient-to-b from-yellow-500 to-yellow-700"
+                  : pos === 2
+                    ? "bg-gradient-to-b from-indigo-500 to-indigo-700"
+                    : "bg-gradient-to-b from-purple-500 to-purple-700"
+              }`}
+            >
+              <img
+                src={rankImages[pos]}
+                alt={`Rank ${pos}`}
+                className="w-[40%] mb-3"
+              />
+              <div className="text-4xl font-semibold mb-2">
+                {entry?.customer.name ?? "-"}
               </div>
-            ) : (
-              <>
-                <h3 className="font-semibold text-gray-900 mb-3">
-                  {panel.title}
-                </h3>
-                <ol className="space-y-1 text-sm">
-                  {topTen(panel).map((c, i) => (
-                    <li key={c.id} className="flex justify-between">
-                      <span>
-                        {i + 1}. {c.name}
-                      </span>
-                      <span className="font-medium">{c.total}</span>
-                    </li>
-                  ))}
-                </ol>
-              </>
-            )}
+              <div className="text-2xl font-mono">{entry?.score ?? "-"}</div>
+            </div>
+          );
+        })}
+      </section>
+
+      <section
+        className={
+          "bg-white" +
+          (ranked.length > 3 &&
+            " border border-gray-200 rounded-xl shadow-sm overflow-hidden")
+        }
+      >
+        {ranked.length > 3 && (
+          <table className="w-full">
+            <thead className="border-b border-gray-200 bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-semibold">
+                  Rank
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold">
+                  Customer
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold">
+                  Age
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold">
+                  Gender
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-semibold">
+                  Score
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {ranked.splice(3).map((r) => (
+                <tr key={r.customer.id} className="border-b hover:bg-gray-50">
+                  <td className="px-4 py-3 font-mono">#{r.rank}</td>
+                  <td className="px-4 py-3 font-medium">{r.customer.name}</td>
+                  <td className="px-4 py-3">
+                    {calculateAge(r.customer.date_of_birth)}
+                  </td>
+                  <td className="px-4 py-3">
+                    {r.customer.gender === "M"
+                      ? "Male"
+                      : r.customer.gender === "F"
+                        ? "Female"
+                        : "Other"}
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono">{r.score}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <Dialog open={showFilter} onOpenChange={setShowFilter}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Filter Leaderboard</DialogTitle>
+            <DialogDescription>Adjust ranking criteria</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                type="number"
+                placeholder="Age from"
+                value={ageFrom}
+                onChange={(e) => setAgeFrom(e.target.value)}
+              />
+              <Input
+                type="number"
+                placeholder="Age to"
+                value={ageTo}
+                onChange={(e) => setAgeTo(e.target.value)}
+              />
+            </div>
+
+            <Select value={gender} onValueChange={setGender}>
+              <SelectTrigger>
+                <SelectValue placeholder="Gender" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="M">Male</SelectItem>
+                <SelectItem value="F">Female</SelectItem>
+                <SelectItem value="O">Other</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={timeFilter}
+              onValueChange={(v) => setTimeFilter(v as TimeFilter)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Time range" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="week">This week</SelectItem>
+                <SelectItem value="month">This month</SelectItem>
+                <SelectItem value="year">This year</SelectItem>
+                <SelectItem value="all">Since start</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-        ))}
-      </div>
+
+          <DialogFooter>
+            <Button onClick={() => setShowFilter(false)}>Apply</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

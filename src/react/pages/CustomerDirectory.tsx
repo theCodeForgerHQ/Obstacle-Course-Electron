@@ -109,10 +109,10 @@ function CustomerRegistration() {
 
       const scoreMap: Record<number, number> = {};
       (result as Score[]).forEach((score) => {
-        if (!scoreMap[score.customerId]) {
-          scoreMap[score.customerId] = 0;
+        if (!scoreMap[score.customer_id]) {
+          scoreMap[score.customer_id] = 0;
         }
-        scoreMap[score.customerId] += score.score;
+        scoreMap[score.customer_id] += score.score;
       });
       setCustomerScoreMap(scoreMap);
     } catch (e) {
@@ -778,7 +778,7 @@ function CustomerRegistration() {
 
           <div className="max-h-80 overflow-y-auto">
             {selectedCustomerForScores &&
-            scores.filter((s) => s.customerId === selectedCustomerForScores.id)
+            scores.filter((s) => s.customer_id === selectedCustomerForScores.id)
               .length === 0 ? (
               <div className="p-8 text-center text-gray-500">
                 No scores recorded yet.
@@ -799,7 +799,7 @@ function CustomerRegistration() {
                   {selectedCustomerForScores &&
                     scores
                       .filter(
-                        (s) => s.customerId === selectedCustomerForScores.id,
+                        (s) => s.customer_id === selectedCustomerForScores.id,
                       )
                       .sort(
                         (a, b) =>
