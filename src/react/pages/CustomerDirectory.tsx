@@ -27,15 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import type { Customer } from "../../electron/utils";
-
-interface Score {
-  id: number;
-  customer_id: number;
-  score: number;
-  date: string;
-  name: string;
-}
+import type { Customer, Score } from "../../electron/utils";
 
 type SortKey = "name" | "id" | "score";
 type SortDir = "asc" | "desc";
@@ -117,10 +109,10 @@ function CustomerRegistration() {
 
       const scoreMap: Record<number, number> = {};
       (result as Score[]).forEach((score) => {
-        if (!scoreMap[score.customer_id]) {
-          scoreMap[score.customer_id] = 0;
+        if (!scoreMap[score.customerId]) {
+          scoreMap[score.customerId] = 0;
         }
-        scoreMap[score.customer_id] += score.score;
+        scoreMap[score.customerId] += score.score;
       });
       setCustomerScoreMap(scoreMap);
     } catch (e) {
@@ -786,7 +778,7 @@ function CustomerRegistration() {
 
           <div className="max-h-80 overflow-y-auto">
             {selectedCustomerForScores &&
-            scores.filter((s) => s.customer_id === selectedCustomerForScores.id)
+            scores.filter((s) => s.customerId === selectedCustomerForScores.id)
               .length === 0 ? (
               <div className="p-8 text-center text-gray-500">
                 No scores recorded yet.
@@ -807,7 +799,7 @@ function CustomerRegistration() {
                   {selectedCustomerForScores &&
                     scores
                       .filter(
-                        (s) => s.customer_id === selectedCustomerForScores.id,
+                        (s) => s.customerId === selectedCustomerForScores.id,
                       )
                       .sort(
                         (a, b) =>

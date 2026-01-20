@@ -18,6 +18,7 @@ import type { Session } from "../electron/utils";
 import CustomerRegistration from "./pages/CustomerDirectory";
 import UsersDirectory from "./pages/UserDirectory";
 import ProfileSettings from "./pages/ProfileSettings";
+import LeaderboardScreen from "./pages/Leaderboard";
 
 type Page = "dashboard" | "participants" | "users" | "leaderboard" | "settings";
 
@@ -81,7 +82,9 @@ export default function App() {
           {activePage === "participants" && <CustomerRegistration />}
           {activePage === "users" && <UsersDirectory />}
           {activePage === "leaderboard" && (
-            <h1 className="text-xl font-semibold">Leaderboard</h1>
+            <h1 className="text-xl font-semibold">
+              <LeaderboardScreen />
+            </h1>
           )}
           {activePage === "settings" && <ProfileSettings />}
         </div>
