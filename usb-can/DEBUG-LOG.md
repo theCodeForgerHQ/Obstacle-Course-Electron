@@ -1,56 +1,112 @@
-# RFID-over-CAN debug log (checkpoint — current accurate state)
+# RFID-over-CAN — what was wrong and how it was fixed
 
-## Goal
-Get RFID reader band UIDs onto the laptop. Reader (ESP32 + RFID + NeoPixel + CAN transceiver, on SMPS power) → CAN bus → a receiver → laptop serial.
+Authoritative reference for the working setup. Topology:
 
-## CORRECTED understanding (important — earlier notes were wrong)
-- The **reader** and the **receiver** legitimately use **OPPOSITE CAN pins** because each ESP is wired to its own transceiver differently. This is NOT a bug:
-  - **Reader firmware:** `CAN_TX=GPIO16, CAN_RX=GPIO17`  (NORMAL mode, 500k)
-  - **Receiver firmware:** `CAN_TX=GPIO17, CAN_RX=GPIO16` (NORMAL mode, 500k)
-- An earlier "pin fix" (changing the reader to TX17/RX16) was WRONG and broke the reader. **Reader must stay TX16/RX17.** Both are now flashed with the user's EXACT original code (`firmware/reader_original`, `firmware/receiver_orig`).
-- This exact code + setup **worked a day ago** (reader → ESP receiver, no USB module involved).
+```
+Reader (ESP32 + 125 kHz RFID + CAN transceiver, on SMPS power)
+   -> CAN bus (CANH/CANL + shared ground)
+   -> Waveshare USB-CAN-A module (on laptop USB)
+   -> laptop  (node read.mjs)
+```
 
-## What works
-- **Reader transmits fine.** With original code it reads bands (`UID: 4100B82E6F`) and queues CAN frames. Serial shows `CAN Sent` x6 then `CAN Failed` — that's the TX buffer (~6 deep) filling because **nothing ACKs** = receiver not hearing it. (`CAN Sent` = queued, NOT received.)
-- **USB-CAN-A module receives reliably** — proved with 83 frames from a plain ESP+SN65HVD230 transmitter. The module is robust (TVS-protected) and tolerates bridging SMPS ground ↔ laptop USB ground.
-- read.mjs decodes module output into `Reader N UID:` (auto-detects module by vid 1a86).
+**End state: working.** A band scan produces a clean record on the laptop with
+`reader`, full 10-char `uid`, and a `time`. Firmware: `firmware/reader_pro`.
+Receiver: `read.mjs`.
 
-## THE BLOCKER (current)
-The **bare ESP receiver (plain ESP + SN65HVD230) cannot tolerate the common-ground tie** needed for CAN:
-- CAN requires a shared ground between the reader (SMPS) and receiver (laptop USB) — non-negotiable physics; without it the differential is out of range and nothing decodes ("CAN Failed").
-- BUT tying the bare ESP's GND → SMPS −V electrically disrupts it: first produced **66k lines of garbage serial in 6s**, then the ESP **dropped off USB entirely**. Laptop on battery did not fix it.
-- So: without the ground tie → receiver hears nothing; with it → bare ESP gets knocked out. The bare ESP is the weak link.
+---
 
-## RECOMMENDED PATH (next session)
-Use the **USB-CAN module as the laptop receiver** instead of the bare ESP — it is proven to receive and is robust to the ground bridging:
-1. Reader: keep `reader_original` (TX16/RX17), on SMPS.
-2. Wire reader CANH/CANL → **module** CANH/CANL. Module **GND → SMPS −V**. Module **USB → laptop**.
-3. Module 120Ω jumper ON. Reader board likely has its own 120Ω too.
-4. Laptop: `cd usb-can && node read.mjs` → scan band → `Reader 1 UID: 4100B82E...` (note: only first 8 chars fit in a CAN frame; full UID is 10 chars `4100B82E6F`).
-- If reader→module still 0: it was failing earlier only because the reader had the WRONG pins (TX17/RX16) then. Now it's TX16/RX17 (correct) and proven to transmit, so retest fresh.
+## The four problems we hit (in order) and the fixes
 
-## Alt if they insist on the ESP receiver (reproduce yesterday)
-The ground tie disruption suggests a ground-loop/potential issue that wasn't present yesterday. Options: power the receiver ESP from the SAME SMPS as the reader (inherent shared ground), or use a USB isolator between laptop and receiver ESP. Verify the bare ESP doesn't drop off USB once grounded before trusting results.
+### 1. `CAN Failed` on the reader, nothing on the laptop
+**Cause:** the Waveshare module only goes bus-active (and **ACKs** frames) once
+`read.mjs` has sent it the settings command putting it in **500k / normal** mode.
+With nothing configuring the module, the reader transmitted into a bus with no
+ACK; its TX buffer (~6 deep) filled and it printed `CAN Failed`.
+**Fix:** run `read.mjs` (normal mode) — the module then ACKs and the reader shows
+`CAN Sent`. `CAN Sent` only means *queued+ACKed*, not *received by software*.
 
-## reader_v2 (the user's desired reader firmware — serial test PASSED)
-`firmware/reader_v2`: idle LEDs red @ 15% brightness, green on read, serial `Reader N | UID: <band> | Time: <ms>`. Works on serial. NOTE: reader_v2 currently has CAN pins TX17/RX16 — **must change to TX16/RX17** before using on the real bus. (timestamp is uptime ms; stamp real time on the laptop side for the leaderboard.)
+### 2. UID truncated to 8 characters
+**Cause:** the original firmware sent the UID as **ASCII** (`"4100BB0845"` =
+10 bytes) but a classic CAN frame holds only **8 data bytes**, so the last 2 chars
+were dropped. Two bands differing only in their last chars would collide.
+**Fix:** pack the 10 hex chars into **5 raw bytes** (`41 00 BB 08 45`). The laptop
+unpacks them back to the full 10-char string. Reader id rides in the CAN
+arbitration id (`0x100 + reader#`), costing no data bytes.
 
-## Toolchain / ports / flashing
-- `arduino-cli` (esp32:esp32 core 3.3.10) + `esptool` (pipx). NeoPixel lib installed.
-- **Plain ESP** = CP2102 (vid 10c4, `usbserial-0001`), auto-reset → flash directly, no BOOT dance. (This is the one that drops off when grounded.)
-- **Reader** = FTDI (vid 0403, `usbserial-A5XK3RJT`), NO auto-reset → hold BOOT, tap EN, release BOOT to flash; tap EN alone to boot after flashing.
-- **USB-CAN module** = CH340 (vid 1a86, port number varies e.g. usbserial-140/1140).
-- Flash: `esptool --port <p> --baud 460800 write-flash 0x0 <merged.bin>` (use 115200 for the FTDI reader).
-- Built bins: reader_original → /tmp/origbuild, receiver_orig → /tmp/rxorig, reader_v2 → /tmp/v2build.
+### 3. Reader stuck — `TX ESP_ERR_INVALID_STATE`
+**Cause:** during testing the module was repeatedly stopped/restarted; while it
+wasn't ACKing, the reader's TX-error counter climbed past 255 and the TWAI
+controller went **BUS_OFF and stopped**. The firmware had **no recovery**, so it
+stayed dead (couldn't even queue a frame) until a manual reset.
+**Fix:** `canRecover()` runs every loop: `BUS_OFF -> twai_initiate_recovery()`,
+`STOPPED -> twai_start()`. The reader now self-heals from a quiet/ACK-less bus —
+important in the field if the laptop ever disconnects.
 
-## Monitors (node, in usb-can/)
-- `read.mjs --port <module>` — decode module → `Reader N UID:`.
-- `monorig.mjs` — show receiver ESP (10c4) + reader (0403) serials side by side.
-- `modsniff.mjs` / `monfinal.mjs` — raw + decoded module output (needs settings cmd).
-- `loopback.mjs` — module internal loopback self-test (controller+USB sanity).
+### 4. With laptop time-sync ON, the laptop received nothing
+We first tried giving the reader real time by having the **laptop broadcast a
+time-sync frame** on the bus (so the reader could stamp absolute time). The moment
+`read.mjs` started transmitting, **all reception stopped** — the reader showed
+`TX ESP_OK` but no frames reached the laptop, and the reader never saw the sync.
+**Cause:** the cheap **Waveshare USB-CAN-A is effectively half-duplex** — it stops
+relaying received frames over USB while it is transmitting. Confirmed by toggling:
+sync off → frames flow again immediately (with backlog flush); sync on → silence.
+**Fix:** the laptop **never transmits**. It is receive-only on the bus.
 
-## Waveshare USB-CAN-A facts
-- Serial 2 Mbaud default; CAN code 0x03 = 500k. Variable frame: `AA <type=0xC0|dlc> <id LE> <data> 55`.
-- Saves settings across power-off; reset button (hold during power-on) restores factory.
-- Module GND tie to the CAN reference IS required for it to receive across power domains.
-- Docs: https://www.waveshare.com/wiki/USB-CAN-A
+---
+
+## Time: how it's handled (and why)
+
+The ESP32 readers have **no RTC**, and problem 4 rules out laptop→bus sync on this
+module. So:
+
+- The reader stamps each scan with its **own `millis()`** at capture and ships it
+  in the frame (bytes 5..7, uint24). This is carried as `reader_ms` — it reflects
+  *when the band was actually read*, robust to delivery delay.
+- The laptop stamps `time` / `epoch_ms` with **its own wall-clock on arrival**.
+  With the receiver always running, arrival ≈ capture within a few ms of CAN/USB
+  latency (verified: records land exactly on the reader's 3 s debounce cadence).
+- If sub-ms-exact capture spacing is ever needed, the laptop can map
+  `reader_ms -> epoch` (offset = min observed `arrival - reader_ms`, the NTP trick)
+  with **no firmware change** — the data is already in every frame.
+
+Originally the user asked for absolute reader-side time; we settled on laptop-side
+stamping after confirming the module can't do bidirectional traffic. The reader
+clock is preserved in the frame so the door stays open.
+
+---
+
+## Frame format (reader_pro -> laptop)
+
+Standard CAN frame, `dlc 8`, arbitration id = `0x100 + READER_NUM`:
+
+| bytes | field | notes |
+|-------|-------|-------|
+| 0..4  | UID   | 5 raw bytes = full 10 hex chars |
+| 5..7  | reader millis | low 24 bits, little-endian, wraps ~4.66 h |
+
+Laptop record: `{ reader, uid, time, epoch_ms, reader_ms, can_id }` → stdout (JSON),
+appended to `events.jsonl`. Human summary → stderr.
+
+---
+
+## Hardware / toolchain facts
+
+- **Reader** = FTDI board (vid 0403, e.g. `usbserial-A5XK3RJT`), **no auto-reset**:
+  hold `BOOT`, tap `EN`, release `BOOT` to enter download mode; tap `EN` to boot.
+  Flash at 115200: `esptool --port <p> --baud 115200 write-flash 0x0 reader_pro.ino.merged.bin`.
+- **Module** = CH340 (vid 1a86, e.g. `usbserial-140`). Auto-detected by `ports.mjs`.
+- **CAN pins on this reader board:** `CAN_TX=GPIO16, CAN_RX=GPIO17`, 500k, NORMAL.
+  (Do not swap — these are proven correct for this board.)
+- A **shared ground** between the reader's SMPS and the laptop USB is required for
+  CAN; the module tolerates the ground bridge fine (it's TVS-protected).
+- Build: `arduino-cli compile --fqbn esp32:esp32:esp32 --build-path /tmp/probuild firmware/reader_pro`
+  (esp32 core 3.3.10, Adafruit NeoPixel lib).
+- Waveshare protocol: serial 2 Mbaud; settings code `0x03` = 500k; variable data
+  frame `AA <type=0xC0|dlc> <id LE> <data> 55`. Docs:
+  https://www.waveshare.com/wiki/USB-CAN-A
+
+## Adding more readers
+
+Set a unique `READER_NUM` per unit (2, 3, …) → CAN id `0x102`, `0x103`. They all
+share the one bus; the module receives all of them; `read.mjs` decodes `reader`
+from the id automatically. No laptop change needed.

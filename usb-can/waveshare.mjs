@@ -148,6 +148,50 @@ export class FrameParser {
   }
 }
 
+/**
+ * Build a variable-length data frame to TRANSMIT through the adapter:
+ *   0xAA  <type=0xC0|ext<<5|rtr<<4|dlc>  <id LE: 2 or 4 bytes>  <data>  0x55
+ * Mirrors the framing the parser above decodes. Used to send time-sync frames.
+ *
+ * @param {{ id: number, data: number[]|Buffer, ext?: boolean, rtr?: boolean }} opts
+ * @returns {Buffer}
+ */
+export function buildDataFrame({ id, data = [], ext = false, rtr = false }) {
+  const dlc = data.length;
+  if (dlc > 8) throw new Error(`CAN data length ${dlc} > 8`);
+  const idLen = ext ? 4 : 2;
+  const type = 0xc0 | (ext ? 0x20 : 0) | (rtr ? 0x10 : 0) | (dlc & 0x0f);
+  const f = Buffer.alloc(2 + idLen + dlc + 1);
+  f[0] = 0xaa;
+  f[1] = type;
+  for (let k = 0; k < idLen; k++) f[2 + k] = (id >>> (8 * k)) & 0xff; // id little-endian
+  for (let k = 0; k < dlc; k++) f[2 + idLen + k] = data[k] & 0xff;
+  f[2 + idLen + dlc] = 0x55;
+  return f;
+}
+
+// Scan frames carry the reader id in the arbitration id: 0x100 + reader number.
+export const SCAN_ID_BASE = 0x100;
+
+/**
+ * Decode a PRO reader scan frame:
+ *   data[0..4] = UID packed as 5 raw bytes  (full 10-hex-char UID)
+ *   data[5..7] = reader millis (uint24 LE)  (capture clock; informational)
+ *
+ * @param {{ id: number, data: Buffer }} msg
+ * @returns {{ reader: number, uid: string, readerMs: number|null }}
+ */
+export function decodeScan(msg) {
+  const reader = msg.id - SCAN_ID_BASE; // 0x101 -> 1
+  const d = msg.data;
+  let uid = "";
+  for (let i = 0; i < 5 && i < d.length; i++) {
+    uid += d[i].toString(16).padStart(2, "0").toUpperCase();
+  }
+  const readerMs = d.length >= 8 ? d[5] | (d[6] << 8) | (d[7] << 16) : null;
+  return { reader, uid, readerMs };
+}
+
 // Reader id -> human number, mirroring the ESP32 receiver sketch.
 export const READER_BY_ID = { 0x101: "1", 0x102: "2", 0x103: "3" };
 
