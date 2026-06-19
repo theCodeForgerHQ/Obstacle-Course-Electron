@@ -1,0 +1,17 @@
+import { SerialPort } from "serialport";
+import { ReadlineParser } from "@serialport/parser-readline";
+import { buildSettingsFrame, FrameParser, decodeRfid } from "./waveshare.mjs";
+const all = await SerialPort.list();
+const mod = all.find(p => (p.vendorId||"").toLowerCase()==="1a86");
+const esp = all.find(p => (p.vendorId||"").toLowerCase()==="10c4");
+console.log(`module=${mod?.path}  esp=${esp?.path}`);
+let got=0, lastEsp="(none)";
+const sp = new SerialPort({ path: mod.path, baudRate: 2000000, dataBits:8, stopBits:1, parity:"none" });
+const parser = new FrameParser(m => { got++; const {reader,uid}=decodeRfid(m); console.log(`  >>> MODULE RECEIVED #${got}: Reader ${reader} UID:"${uid}"`); });
+sp.on("data", c=>parser.push(c));
+sp.on("open", ()=>sp.write(buildSettingsFrame({bitrate:500000}), ()=>sp.drain(()=>{})));
+const ep = new SerialPort({ path: esp.path, baudRate: 115200 });
+ep.pipe(new ReadlineParser({delimiter:"\n"})).on("data", l=>{const t=l.trim(); if(t.startsWith("TX ")) lastEsp=t;});
+let n=0;
+const iv=setInterval(()=>{n++;console.log(`[${n*2}s] esp: ${lastEsp}  |  module received: ${got}`);},2000);
+setTimeout(()=>{clearInterval(iv);console.log(`\n=== module received total: ${got} ===`);process.exit(0);},20000);

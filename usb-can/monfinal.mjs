@@ -1,0 +1,12 @@
+import { SerialPort } from "serialport";
+import { buildSettingsFrame, FrameParser, decodeRfid } from "./waveshare.mjs";
+const all = await SerialPort.list();
+const mod = all.find(p => (p.vendorId||"").toLowerCase()==="1a86");
+console.log(`module=${mod.path}; settings 500k/normal sent; ESP transmitting. Watching 25s.`);
+const sp = new SerialPort({ path: mod.path, baudRate: 2000000, dataBits:8, stopBits:1, parity:"none" });
+let raw=0, frames=0;
+const parser = new FrameParser(m=>{frames++;const {reader,uid}=decodeRfid(m);console.log(`  >>> DECODED #${frames}: Reader ${reader} UID:"${uid}"`);});
+sp.on("data", c=>{raw+=c.length; process.stdout.write("RAW: "+[...c].map(b=>b.toString(16).padStart(2,"0")).join(" ")+"\n"); parser.push(c);});
+sp.on("open", ()=>sp.write(buildSettingsFrame({bitrate:500000}), ()=>sp.drain(()=>{})));
+let s=0; const iv=setInterval(()=>{s+=5;console.log(`[${s}s] raw bytes=${raw} decoded=${frames}  (connect module GND -> ESP GND)`);},5000);
+setTimeout(()=>{clearInterval(iv);console.log(`\n=== raw=${raw} decoded=${frames} ===`);process.exit(0);},25000);

@@ -1,0 +1,12 @@
+import { SerialPort } from "serialport";
+import { ReadlineParser } from "@serialport/parser-readline";
+const all = await SerialPort.list();
+const esp = all.find(p => (p.vendorId||"").toLowerCase()==="10c4");
+const rdr = all.find(p => (p.vendorId||"").toLowerCase()==="0403");
+console.log(`receiver(esp)=${esp?.path}  reader=${rdr?.path}`);
+const ep=new SerialPort({path:esp.path,baudRate:115200});
+ep.pipe(new ReadlineParser({delimiter:"\n"})).on("data",l=>{const t=l.trim(); if(t) console.log("RECEIVER| "+t);});
+const rp=new SerialPort({path:rdr.path,baudRate:115200});
+rp.pipe(new ReadlineParser({delimiter:"\n"})).on("data",l=>{const t=l.trim(); if(t) console.log("READER  | "+t);});
+console.log(">>> tap EN/RST on reader, wire as yesterday, SCAN A BAND. (30s) <<<");
+setTimeout(()=>process.exit(0),30000);

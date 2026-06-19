@@ -1,0 +1,22 @@
+import { SerialPort } from "serialport";
+import { ReadlineParser } from "@serialport/parser-readline";
+import { buildSettingsFrame } from "./waveshare.mjs";
+const all = await SerialPort.list();
+const mod = all.find(p => (p.vendorId||"").toLowerCase()==="1a86");
+const esp = all.find(p => (p.vendorId||"").toLowerCase()==="10c4");
+console.log(`module=${mod.path} esp=${esp.path}`);
+const sp = new SerialPort({ path: mod.path, baudRate: 2000000, dataBits:8, stopBits:1, parity:"none" });
+sp.on("open", ()=>sp.write(buildSettingsFrame({bitrate:500000}), ()=>sp.drain(()=>{})));
+const ep = new SerialPort({ path: esp.path, baudRate: 115200 });
+let got=0;
+ep.pipe(new ReadlineParser({delimiter:"\n"})).on("data", l=>{const t=l.trim(); if(t.startsWith("GOT")){got++;console.log(`  >>> ESP RECEIVED #${got}: ${t}`);}});
+let n=0;
+const iv = setInterval(()=>{
+  n++;
+  const data = Buffer.from(("MODTX"+String(n%1000).padStart(3,"0")).slice(0,8).padEnd(8,"\0"),"ascii");
+  const tx = Buffer.concat([Buffer.from([0xaa,0xc8,0x00,0x02]), data, Buffer.from([0x55])]);
+  sp.write(tx, ()=>sp.drain(()=>{}));
+}, 250);
+let s=0;
+const iv2=setInterval(()=>{s+=3;console.log(`[${s}s] module transmitting... ESP received: ${got}  (re-seat/swap transceiver<->module CANH/CANL)`);},3000);
+setTimeout(()=>{clearInterval(iv);clearInterval(iv2);console.log(`\n=== ESP received ${got} frames from the module ===`);process.exit(0);}, 30000);

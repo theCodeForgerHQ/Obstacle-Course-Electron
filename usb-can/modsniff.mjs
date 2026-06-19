@@ -1,0 +1,10 @@
+import { SerialPort } from "serialport";
+import { buildSettingsFrame } from "./waveshare.mjs";
+const all = await SerialPort.list();
+const mod = all.find(p => (p.vendorId||"").toLowerCase()==="1a86");
+console.log(`module=${mod.path}; sending 500k/normal settings, then dumping RAW bytes for 12s (ESP is transmitting)`);
+const sp = new SerialPort({ path: mod.path, baudRate: 2000000, dataBits:8, stopBits:1, parity:"none" });
+let total=0;
+sp.on("data", c => { total+=c.length; process.stdout.write("RAW: "+[...c].map(b=>b.toString(16).padStart(2,"0")).join(" ")+"\n"); });
+sp.on("open", ()=>sp.write(buildSettingsFrame({bitrate:500000}), ()=>sp.drain(()=>{})));
+setTimeout(()=>{ console.log(`\n=== TOTAL RAW BYTES from module: ${total} ===`); console.log(total>0?"MODULE IS RECEIVING (parse/format issue)":"MODULE RECEIVING NOTHING (mode/transceiver/wiring)"); process.exit(0); }, 12000);
