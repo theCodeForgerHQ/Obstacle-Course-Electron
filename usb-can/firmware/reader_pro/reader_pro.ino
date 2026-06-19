@@ -28,7 +28,9 @@
 #include <Adafruit_NeoPixel.h>
 #include "driver/twai.h"
 
+#ifndef READER_NUM
 #define READER_NUM 1                       // Reader 1, 2, 3, ... (unique per unit)
+#endif                                     // override at build time: -DREADER_NUM=2
 #define SCAN_CAN_ID (0x100 + READER_NUM)   // arbitration id carries the reader id
 
 #define LED_PIN     4
